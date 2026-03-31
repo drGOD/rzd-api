@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=69.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rzd-api"
+version = "1.0.0"
+description = "Python client for RZD (Russian Railways) pass.rzd.ru API"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "drgod"},
+]
+keywords = ["rzd", "railway", "trains", "tickets", "api", "mcp"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "requests>=2.31.0",
+    "urllib3>=2.0.0",
+]
+
+[project.optional-dependencies]
+mcp = [
+    "mcp>=1.0.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "rzd-api[mcp]",
+]
+
+[project.scripts]
+rzd-mcp-server = "mcp_server.server:main"
+
+[project.urls]
+Homepage = "https://github.com/drGOD/rzd-api"
+Repository = "https://github.com/drGOD/rzd-api"
+Issues = "https://github.com/drGOD/rzd-api/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rzd_api*", "mcp_server*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

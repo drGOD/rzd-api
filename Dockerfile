@@ -1,6 +1,18 @@
-FROM composer:lts
+FROM python:3.12-slim
+
 WORKDIR /app
-COPY . /app
-RUN composer install
+
+COPY pyproject.toml .
+COPY rzd_api/ rzd_api/
+COPY mcp_server/ mcp_server/
+COPY README.md .
+
+RUN pip install --no-cache-dir ".[mcp]"
+
+ENV MCP_TRANSPORT=streamable-http
+ENV MCP_HOST=0.0.0.0
+ENV MCP_PORT=8000
+
 EXPOSE 8000
-CMD [ "php",  "-S", "0.0.0.0:8000", "-t", "controllers" ]
+
+CMD ["rzd-mcp-server"]
