@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "rzd-api"
+version = "1.0.0"
+description = "Python client for RZD (Russian Railways) pass.rzd.ru API"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+dependencies = [
+    "requests>=2.31.0",
+    "mcp>=1.0.0",
+    "urllib3>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+]
+
+[project.scripts]
+rzd-mcp-server = "mcp_server.server:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rzd_api*", "mcp_server*"]
