@@ -19,46 +19,60 @@ class Api:
         self.station_list_path = 'https://pass.rzd.ru/ticket/services/route/basicRoute'
         self.query = Query(config)
 
-    def train_routes(self, params: dict) -> str:
-        """Получает маршруты в одну точку (one-way routes)."""
+    def train_routes_data(self, params: dict) -> list[dict]:
+        """Получает маршруты в одну точку как Python-объект."""
         layer = {'layer_id': self.ROUTES_LAYER}
         routes = self.query.get(self.path, {**layer, **params})
-        return json.dumps(routes['tp'][0]['list'], ensure_ascii=False)
+        return routes['tp'][0]['list']
+
+    def train_routes(self, params: dict) -> str:
+        """Получает маршруты в одну точку (one-way routes)."""
+        return json.dumps(self.train_routes_data(params), ensure_ascii=False)
+
+    def train_routes_return_data(self, params: dict) -> dict[str, list[dict]]:
+        """Получает маршруты туда-обратно как Python-объект."""
+        layer = {'layer_id': self.ROUTES_LAYER}
+        routes = self.query.get(self.path, {**layer, **params})
+        return {
+            'forward': routes['tp'][0]['list'],
+            'back': routes['tp'][1]['list'],
+        }
 
     def train_routes_return(self, params: dict) -> str:
         """Получает маршруты туда-обратно (round-trip routes)."""
-        layer = {'layer_id': self.ROUTES_LAYER}
-        routes = self.query.get(self.path, {**layer, **params})
-        return json.dumps({
-            'forward': routes['tp'][0]['list'],
-            'back': routes['tp'][1]['list'],
-        }, ensure_ascii=False)
+        return json.dumps(self.train_routes_return_data(params), ensure_ascii=False)
 
-    def train_carriages(self, params: dict) -> str:
-        """Получение списка вагонов (carriages/cars for a specific train)."""
+    def train_carriages_data(self, params: dict) -> dict:
+        """Получение списка вагонов как Python-объект."""
         layer = {'layer_id': self.CARRIAGES_LAYER}
         carriages = self.query.get(self.path, {**layer, **params})
         lst = carriages.get('lst', [{}])
-        result = {
+        return {
             'cars': lst[0].get('cars') if lst else None,
             'functionBlocks': lst[0].get('functionBlocks') if lst else None,
             'schemes': carriages.get('schemes'),
             'companies': carriages.get('insuranceCompany'),
         }
-        return json.dumps(result, ensure_ascii=False)
 
-    def train_station_list(self, params: dict) -> str:
-        """Получение списка станций маршрута (all stations on a train's route)."""
+    def train_carriages(self, params: dict) -> str:
+        """Получение списка вагонов (carriages/cars for a specific train)."""
+        return json.dumps(self.train_carriages_data(params), ensure_ascii=False)
+
+    def train_station_list_data(self, params: dict) -> dict:
+        """Получение списка станций маршрута как Python-объект."""
         layer = {'STRUCTURE_ID': self.STATIONS_STRUCTURE_ID}
         stations = self.query.get(self.station_list_path, {**layer, **params})
-        result = {
+        return {
             'train': stations['data']['trainInfo'],
             'routes': stations['data']['routes'],
         }
-        return json.dumps(result, ensure_ascii=False)
 
-    def station_code(self, params: dict) -> str:
-        """Получение кодов станций по части названия (search stations by partial name)."""
+    def train_station_list(self, params: dict) -> str:
+        """Получение списка станций маршрута (all stations on a train's route)."""
+        return json.dumps(self.train_station_list_data(params), ensure_ascii=False)
+
+    def station_code_data(self, params: dict) -> list[dict]:
+        """Получение кодов станций по части названия как Python-объект."""
         query_params = {'lang': self.lang, **params}
         routes = self.query.get(self.suggestion_path, query_params, method='GET')
 
@@ -74,4 +88,8 @@ class Api:
                         'code': station.get('c'),
                     })
 
-        return json.dumps(stations, ensure_ascii=False)
+        return stations
+
+    def station_code(self, params: dict) -> str:
+        """Получение кодов станций по части названия (search stations by partial name)."""
+        return json.dumps(self.station_code_data(params), ensure_ascii=False)

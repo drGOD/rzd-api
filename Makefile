@@ -7,6 +7,7 @@ test:
 	pytest tests/ -v
 
 run:
+	pip install -e ".[mcp]"
 	rzd-mcp-server
 
 docker-build:

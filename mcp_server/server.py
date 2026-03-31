@@ -11,12 +11,11 @@ Transport is configured via environment variables:
 """
 
 import os
+import sys
 
-from mcp.server.fastmcp import FastMCP
+from rzd_api import Api
 
-from rzd_api import Api, Config
-
-mcp = FastMCP("RZD API")
+mcp = None
 
 _api: Api | None = None
 
@@ -28,7 +27,6 @@ def get_api() -> Api:
     return _api
 
 
-@mcp.tool()
 def train_routes(
     code0: str,
     code1: str,
@@ -64,7 +62,6 @@ def train_routes(
     return get_api().train_routes(params)
 
 
-@mcp.tool()
 def train_routes_return(
     code0: str,
     code1: str,
@@ -98,7 +95,6 @@ def train_routes_return(
     return get_api().train_routes_return(params)
 
 
-@mcp.tool()
 def train_carriages(
     code0: str,
     code1: str,
@@ -131,7 +127,6 @@ def train_carriages(
     return get_api().train_carriages(params)
 
 
-@mcp.tool()
 def train_station_list(
     train_number: str,
     dep_date: str,
@@ -152,7 +147,6 @@ def train_station_list(
     return get_api().train_station_list(params)
 
 
-@mcp.tool()
 def station_code(
     station_name_part: str,
     compact_mode: str = 'y',
@@ -173,14 +167,37 @@ def station_code(
     return get_api().station_code(params)
 
 
+def create_mcp_app():
+    try:
+        from mcp.server.fastmcp import FastMCP
+    except ImportError as exc:
+        raise RuntimeError(
+            "MCP support is not installed. Install it with: pip install 'rzd-api[mcp]'"
+        ) from exc
+
+    app = FastMCP("RZD API")
+    app.tool()(train_routes)
+    app.tool()(train_routes_return)
+    app.tool()(train_carriages)
+    app.tool()(train_station_list)
+    app.tool()(station_code)
+    return app
+
+
 def main() -> None:
+    try:
+        app = create_mcp_app()
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        raise SystemExit(1) from exc
+
     transport = os.getenv('MCP_TRANSPORT', 'stdio')
     if transport in ('sse', 'streamable-http'):
         host = os.getenv('MCP_HOST', '0.0.0.0')
         port = int(os.getenv('MCP_PORT', '8000'))
-        mcp.run(transport=transport, host=host, port=port)
+        app.run(transport=transport, host=host, port=port)
     else:
-        mcp.run(transport='stdio')
+        app.run(transport='stdio')
 
 
 if __name__ == '__main__':

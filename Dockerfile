@@ -5,8 +5,9 @@ WORKDIR /app
 COPY pyproject.toml .
 COPY rzd_api/ rzd_api/
 COPY mcp_server/ mcp_server/
+COPY README.md .
 
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir ".[mcp]"
 
 ENV MCP_TRANSPORT=streamable-http
 ENV MCP_HOST=0.0.0.0

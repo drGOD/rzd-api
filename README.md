@@ -15,9 +15,39 @@ Python-клиент для API сайта [pass.rzd.ru](https://pass.rzd.ru) (Р
 
 ## Установка
 
+**Из PyPI после публикации:**
+```sh
+pip install rzd-api
+```
+
+**Как библиотека без MCP-зависимостей:**
+```sh
+pip install rzd-api
+```
+
+**С поддержкой MCP-сервера:**
+```sh
+pip install "rzd-api[mcp]"
+```
+
+**Напрямую из GitHub:**
+```sh
+pip install "git+https://github.com/drGOD/rzd-api.git"
+```
+
+**Напрямую из GitHub c MCP-сервером:**
+```sh
+pip install "rzd-api[mcp] @ git+https://github.com/drGOD/rzd-api.git"
+```
+
 **Из исходников:**
 ```sh
 pip install .
+```
+
+**Из исходников c MCP-сервером:**
+```sh
+pip install ".[mcp]"
 ```
 
 **Для разработки (с тестами):**
@@ -27,9 +57,61 @@ pip install -e ".[dev]"
 make install
 ```
 
+**Проверка импорта после установки:**
+```sh
+python -c "from rzd_api import RzdClient; print(RzdClient.__name__)"
+```
+
+**Проверка MCP-команды после установки extra:**
+```sh
+rzd-mcp-server
+```
+
 ---
 
 ## Быстрый старт
+
+### Как библиотека
+
+```python
+from datetime import date
+from rzd_api import RzdClient
+
+client = RzdClient()
+
+# Можно передавать названия станций, клиент сам найдёт их коды
+tickets = client.search_tickets(
+    from_station='Санкт-Петербург',
+    to_station='Москва',
+    departure_date=date(2026, 4, 1),
+)
+
+for train in tickets[:3]:
+    print(train['number'], train['route0'], train['route1'], train['time0'], train['time1'])
+
+# Туда-обратно
+round_trip = client.search_tickets(
+    from_station='Санкт-Петербург',
+    to_station='Москва',
+    departure_date='01.04.2026',
+    return_date='05.04.2026',
+)
+
+# Поиск станций и получение кода
+stations = client.find_stations('Чеб')
+code = client.resolve_station_code('Москва')
+
+# Детали по вагонам
+cars = client.get_carriages(
+    from_station='Санкт-Петербург',
+    to_station='Москва',
+    departure_date='01.04.2026',
+    departure_time='22:30',
+    train_number='054А',
+)
+```
+
+### Низкоуровневый API
 
 ```python
 from datetime import datetime, timedelta
@@ -65,17 +147,46 @@ print(routes)   # JSON-строка
 
 ## API
 
+### `RzdClient(config=None, api=None)`
+
+Высокоуровневый интерфейс для использования пакета как библиотеки.  
+Методы возвращают обычные Python-объекты (`list` / `dict`) и принимают станции как коды или названия.
+
+| Метод | Описание |
+|---|---|
+| `search_tickets(from_station, to_station, departure_date, return_date=None, *, only_with_seats=True, include_transfers=False, transport_type='all')` | Удобный поиск билетов |
+| `find_stations(query, compact_mode='y')` | Поиск станций по части названия |
+| `resolve_station_code(station)` | Получить код станции по названию или вернуть переданный код |
+| `get_carriages(from_station, to_station, departure_date, departure_time, train_number)` | Вагоны и свободные места |
+| `get_route_stations(train_number, departure_date)` | Список станций маршрута |
+
+#### `search_tickets`
+
+| Параметр | Описание |
+|---|---|
+| `from_station` / `to_station` | Код станции (`2004000`) или название (`Санкт-Петербург`) |
+| `departure_date` / `return_date` | `str`, `datetime.date` или `datetime.datetime` |
+| `only_with_seats` | `True` — только поезда с билетами |
+| `include_transfers` | `True` — искать варианты с пересадками |
+| `transport_type` | `'trains'`, `'suburban'`, `'all'` |
+
 ### `Api(config=None)`
 
-Все методы принимают `dict` с параметрами и возвращают **JSON-строку**.
+Низкоуровневый совместимый интерфейс. Методы ниже сохраняют текущее поведение и возвращают **JSON-строку**.  
+Если нужен Python-объект без `json.loads`, можно использовать парные методы с суффиксом `_data`.
 
 | Метод | Описание |
 |---|---|
 | `train_routes(params)` | Маршруты в одну сторону |
+| `train_routes_data(params)` | Маршруты в одну сторону как `list[dict]` |
 | `train_routes_return(params)` | Маршруты туда-обратно |
+| `train_routes_return_data(params)` | Маршруты туда-обратно как `dict` |
 | `train_carriages(params)` | Вагоны и свободные места |
+| `train_carriages_data(params)` | Вагоны и свободные места как `dict` |
 | `train_station_list(params)` | Все станции на маршруте поезда |
+| `train_station_list_data(params)` | Все станции на маршруте как `dict` |
 | `station_code(params)` | Поиск кода станции по части названия |
+| `station_code_data(params)` | Поиск кода станции как `list[dict]` |
 
 #### `train_routes` / `train_routes_return`
 
@@ -129,6 +240,11 @@ print(routes)   # JSON-строка
 ## MCP-сервер
 
 MCP-сервер позволяет использовать API РЖД напрямую из Claude Desktop или любого MCP-клиента.
+
+Для локального запуска нужен extra `mcp`:
+```sh
+pip install "rzd-api[mcp]"
+```
 
 ### Инструменты
 
