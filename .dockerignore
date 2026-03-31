@@ -1,0 +1,16 @@
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+dist
+build
+tests
+.pytest_cache
+.coverage
+docker-compose.yml
+Makefile
+README.md

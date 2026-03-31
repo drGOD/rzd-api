@@ -1,3 +1,4 @@
+import logging
 import time
 import requests
 import urllib3
@@ -5,6 +6,8 @@ import urllib3
 from .config import Config
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+logger = logging.getLogger(__name__)
 
 
 class RzdException(Exception):
@@ -16,6 +19,11 @@ class Query:
         self.config = config
         self.session = requests.Session()
         self.session.verify = False
+
+        if config.debug:
+            logging.basicConfig(level=logging.DEBUG)
+            from http.client import HTTPConnection
+            HTTPConnection.debuglevel = 1
 
         headers = {'Accept': 'application/json'}
         if config.user_agent:
@@ -37,10 +45,12 @@ class Query:
         rid = None
         content = None
 
-        for _ in range(10):
+        for attempt in range(10):
             request_params = dict(params)
             if rid is not None:
                 request_params['rid'] = rid
+
+            logger.debug('[attempt %d] %s %s params=%s', attempt + 1, method, path, request_params)
 
             if method == 'GET':
                 response = self.session.get(path, params=request_params, timeout=self.config.timeout)
@@ -51,6 +61,7 @@ class Query:
             content = response.json()
 
             result = content.get('result', 'OK') if isinstance(content, dict) else 'OK'
+            logger.debug('[attempt %d] result=%s', attempt + 1, result)
 
             if result in ('RID', 'REQUEST_ID'):
                 rid = self._get_rid(content)

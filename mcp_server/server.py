@@ -3,7 +3,14 @@ MCP Server for RZD (Russian Railways) API.
 
 Exposes rzd_api as MCP tools so any MCP-compatible client (Claude, etc.)
 can search train routes, carriages, and station codes.
+
+Transport is configured via environment variables:
+  MCP_TRANSPORT  — stdio (default) | sse | streamable-http
+  MCP_HOST       — bind host for HTTP transports (default: 0.0.0.0)
+  MCP_PORT       — bind port for HTTP transports (default: 8000)
 """
+
+import os
 
 from mcp.server.fastmcp import FastMCP
 
@@ -167,7 +174,13 @@ def station_code(
 
 
 def main() -> None:
-    mcp.run()
+    transport = os.getenv('MCP_TRANSPORT', 'stdio')
+    if transport in ('sse', 'streamable-http'):
+        host = os.getenv('MCP_HOST', '0.0.0.0')
+        port = int(os.getenv('MCP_PORT', '8000'))
+        mcp.run(transport=transport, host=host, port=port)
+    else:
+        mcp.run(transport='stdio')
 
 
 if __name__ == '__main__':
