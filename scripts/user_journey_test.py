@@ -125,7 +125,7 @@ def _extract_trains(payload: Any) -> list[dict[str, Any]]:
     for node in _iter_dict_nodes(payload):
         train_no = _first_non_empty(
             node,
-            ["TrainNumber", "trainNumber", "number", "displayTrainNumber", "hiddenTrainNumber"],
+            ["TrainNumber", "displayTrainNumber", "hiddenTrainNumber"],
         )
         departure = _first_non_empty(
             node,
@@ -143,7 +143,7 @@ def _extract_trains(payload: Any) -> list[dict[str, Any]]:
 def _normalize_train(train: dict[str, Any]) -> dict[str, Any]:
     number = _first_non_empty(
         train,
-        ["TrainNumber", "trainNumber", "number", "displayTrainNumber", "hiddenTrainNumber"],
+        ["TrainNumber", "displayTrainNumber", "hiddenTrainNumber"],
     )
     departure = _first_non_empty(
         train,
@@ -157,8 +157,8 @@ def _normalize_train(train: dict[str, Any]) -> dict[str, Any]:
         train,
         ["MinPrice", "minPrice", "priceFrom", "PriceFrom", "TotalPrice", "totalPrice"],
     )
-    route_from = _first_non_empty(train, ["OriginStationName", "originStationName", "route0", "From"])
-    route_to = _first_non_empty(train, ["DestinationStationName", "destinationStationName", "route1", "To"])
+    route_from = _first_non_empty(train, ["OriginStationName", "originStationName", "From"])
+    route_to = _first_non_empty(train, ["DestinationStationName", "destinationStationName", "To"])
     return {
         "train_number": number,
         "departure": departure,

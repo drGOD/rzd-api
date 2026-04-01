@@ -11,19 +11,19 @@ class FakeApi:
 
     def train_routes_data(self, params):
         self.calls.append(('train_routes_data', params))
-        return [{'number': '001A'}]
+        return [{'TrainNumber': '001A'}]
 
     def train_routes_return_data(self, params):
         self.calls.append(('train_routes_return_data', params))
-        return {'forward': [{'number': '001A'}], 'back': [{'number': '002A'}]}
+        return {'forward': [{'TrainNumber': '001A'}], 'back': [{'TrainNumber': '002A'}]}
 
     def train_carriages_data(self, params):
         self.calls.append(('train_carriages_data', params))
-        return {'cars': [{'cnumber': '01'}]}
+        return {'cars': [{'CarNumber': '01'}]}
 
     def train_station_list_data(self, params):
         self.calls.append(('train_station_list_data', params))
-        return {'train': {'number': params['trainNumber']}, 'routes': []}
+        return {'train': {'TrainNumber': params['id']}, 'routes': []}
 
     def station_code_data(self, params):
         self.calls.append(('station_code_data', params))
@@ -44,17 +44,15 @@ def client():
 def test_search_tickets_by_station_names(client):
     result = client.search_tickets('Санкт-Петербург', 'Москва', date(2026, 4, 3))
 
-    assert result == [{'number': '001A'}]
+    assert result == [{'TrainNumber': '001A'}]
     method, params = client.api.calls[-1]
     assert method == 'train_routes_data'
     assert params == {
-        'code0': '2004000',
-        'code1': '2000000',
-        'dt0': '03.04.2026',
-        'dir': 0,
-        'tfl': 3,
-        'checkSeats': 1,
-        'md': 0,
+        'origin': '2004000',
+        'destination': '2000000',
+        'departureDate': '2026-04-03T00:00:00',
+        'adultPassengersQuantity': 1,
+        'childrenPassengersQuantity': 0,
     }
 
 
@@ -69,38 +67,38 @@ def test_search_round_trip_with_codes_and_datetime(client):
         transport_type='trains',
     )
 
-    assert result['back'][0]['number'] == '002A'
+    assert result['back'][0]['TrainNumber'] == '002A'
     method, params = client.api.calls[-1]
     assert method == 'train_routes_return_data'
     assert params == {
-        'code0': '2004000',
-        'code1': '2000000',
-        'dt0': '03.04.2026',
-        'dt1': '07.04.2026',
-        'dir': 1,
-        'tfl': 1,
-        'checkSeats': 0,
-        'md': 1,
+        'origin': '2004000',
+        'destination': '2000000',
+        'departureDate': '2026-04-03T10:30:00',
+        'returnDate': '2026-04-07T00:00:00',
+        'adultPassengersQuantity': 1,
+        'childrenPassengersQuantity': 0,
     }
 
 
 def test_get_carriages_uses_resolved_codes(client):
     result = client.get_carriages('Петер', 'Москва', '03.04.2026', '22:30', '001A')
 
-    assert result['cars'][0]['cnumber'] == '01'
+    assert result['cars'][0]['CarNumber'] == '01'
     method, params = client.api.calls[-1]
     assert method == 'train_carriages_data'
-    assert params['code0'] == '2004000'
-    assert params['code1'] == '2000000'
+    assert params['OriginCode'] == '2004000'
+    assert params['DestinationCode'] == '2000000'
+    assert params['DepartureDate'] == '2026-04-03T22:30:00'
+    assert params['TrainNumber'] == '001A'
 
 
 def test_get_route_stations_formats_date(client):
-    result = client.get_route_stations('054Г', date(2026, 4, 3))
+    result = client.get_route_stations('054Г')
 
-    assert result['train']['number'] == '054Г'
+    assert result['train']['TrainNumber'] == '054Г'
     method, params = client.api.calls[-1]
     assert method == 'train_station_list_data'
-    assert params['depDate'] == '03.04.2026'
+    assert params['id'] == '054Г'
 
 
 def test_resolve_station_code_prefers_exact_match(client):

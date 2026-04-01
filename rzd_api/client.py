@@ -32,18 +32,19 @@ class RzdClient:
         transport_type: str = 'all',
     ) -> list[dict[str, Any]] | dict[str, list[dict[str, Any]]]:
         """Search tickets by station names or station codes."""
+        _ = only_with_seats
+        _ = include_transfers
+        _ = self._transport_type_code(transport_type)
         params = {
-            'code0': self.resolve_station_code(from_station),
-            'code1': self.resolve_station_code(to_station),
-            'dt0': self._format_date(departure_date),
-            'dir': 1 if return_date is not None else 0,
-            'tfl': self._transport_type_code(transport_type),
-            'checkSeats': 1 if only_with_seats else 0,
-            'md': 1 if include_transfers else 0,
+            'origin': self.resolve_station_code(from_station),
+            'destination': self.resolve_station_code(to_station),
+            'departureDate': self._to_iso_datetime(departure_date),
+            'adultPassengersQuantity': 1,
+            'childrenPassengersQuantity': 0,
         }
 
         if return_date is not None:
-            params['dt1'] = self._format_date(return_date)
+            params['returnDate'] = self._to_iso_datetime(return_date)
             return self.api.train_routes_return_data(params)
 
         return self.api.train_routes_data(params)
@@ -58,31 +59,34 @@ class RzdClient:
     ) -> dict[str, Any]:
         """Fetch carriage information for a train."""
         params = {
-            'code0': self.resolve_station_code(from_station),
-            'code1': self.resolve_station_code(to_station),
-            'dt0': self._format_date(departure_date),
-            'time0': departure_time,
-            'tnum0': train_number,
-            'dir': 0,
+            'OriginCode': self.resolve_station_code(from_station),
+            'DestinationCode': self.resolve_station_code(to_station),
+            'DepartureDate': self._to_iso_datetime(departure_date, departure_time),
+            'TrainNumber': train_number,
         }
         return self.api.train_carriages_data(params)
 
     def get_route_stations(
         self,
-        train_number: str,
-        departure_date: str | date | datetime,
+        object_id: str,
     ) -> dict[str, Any]:
         """Fetch all stations for a train route."""
         return self.api.train_station_list_data({
-            'trainNumber': train_number,
-            'depDate': self._format_date(departure_date),
+            'id': object_id,
         })
 
-    def find_stations(self, query: str, *, compact_mode: str = 'y') -> list[dict[str, str]]:
+    def find_stations(
+        self,
+        query: str,
+        *,
+        transport_type: str = 'rail,suburban',
+        group_results: bool = True,
+    ) -> list[dict[str, str]]:
         """Find stations by a partial name."""
         return self.api.station_code_data({
             'stationNamePart': query,
-            'compactMode': compact_mode,
+            'transportType': transport_type,
+            'groupResults': group_results,
         })
 
     def resolve_station_code(self, station: str | int) -> str:
@@ -105,12 +109,26 @@ class RzdClient:
 
         return matches[0]['code']
 
-    def _format_date(self, value: str | date | datetime) -> str:
+    def _to_iso_datetime(self, value: str | date | datetime, time_value: str | None = None) -> str:
         if isinstance(value, datetime):
-            return value.strftime('%d.%m.%Y')
+            return value.strftime('%Y-%m-%dT%H:%M:%S')
         if isinstance(value, date):
-            return value.strftime('%d.%m.%Y')
-        return value
+            if time_value:
+                parsed_time = datetime.strptime(time_value, '%H:%M').time()
+                return datetime.combine(value, parsed_time).strftime('%Y-%m-%dT%H:%M:%S')
+            return value.strftime('%Y-%m-%dT00:00:00')
+
+        raw = str(value).strip()
+        if 'T' in raw:
+            return raw
+        try:
+            parsed = datetime.strptime(raw, '%d.%m.%Y')
+            if time_value:
+                parsed_time = datetime.strptime(time_value, '%H:%M').time()
+                parsed = datetime.combine(parsed.date(), parsed_time)
+            return parsed.strftime('%Y-%m-%dT%H:%M:%S')
+        except ValueError:
+            return raw
 
     def _transport_type_code(self, transport_type: str) -> int:
         try:

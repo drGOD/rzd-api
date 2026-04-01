@@ -35,7 +35,7 @@ class Api:
         """Получает маршруты туда-обратно как Python-объект."""
         forward_params = dict(params)
         back_params = dict(params)
-        back_params['dt0'] = params['dt1']
+        back_params['departureDate'] = params['returnDate']
 
         return {
             'forward': self.train_routes_data(forward_params),
@@ -73,7 +73,7 @@ class Api:
     def train_station_list_data(self, params: dict) -> dict:
         """Получение списка станций маршрута как Python-объект."""
         query_params = {
-            'id': params.get('objectId') or params.get('id') or params.get('trainNumber'),
+            'id': params.get('objectId') or params.get('id'),
         }
         payload = self.query.get(f'{self.base_path}/getobject', query_params, method='GET')
         if isinstance(payload, dict):
@@ -137,12 +137,9 @@ class Api:
             'service_provider': params.get('service_provider', 'B2B_RZD'),
             'getByLocalTime': self._bool_param(params.get('getByLocalTime', True)),
             'carGrouping': params.get('carGrouping', 'DontGroup'),
-            'origin': params.get('origin', params.get('code0')),
-            'destination': params.get('destination', params.get('code1')),
-            'departureDate': params.get(
-                'departureDate',
-                self._to_iso_datetime(params.get('dt0')),
-            ),
+            'origin': params['origin'],
+            'destination': params['destination'],
+            'departureDate': self._to_iso_datetime(params['departureDate']),
             'specialPlacesDemand': params.get(
                 'specialPlacesDemand',
                 'StandardPlacesAndForDisabledPersons',
@@ -164,14 +161,11 @@ class Api:
 
     def _build_car_place_prices_body(self, params: dict[str, Any]) -> dict[str, Any]:
         return {
-            'OriginCode': params.get('OriginCode', params.get('code0')),
-            'DestinationCode': params.get('DestinationCode', params.get('code1')),
+            'OriginCode': params['OriginCode'],
+            'DestinationCode': params['DestinationCode'],
             'Provider': params.get('Provider', 'P1'),
-            'DepartureDate': params.get(
-                'DepartureDate',
-                self._to_iso_datetime(params.get('dt0'), params.get('time0')),
-            ),
-            'TrainNumber': params.get('TrainNumber', params.get('tnum0')),
+            'DepartureDate': self._to_iso_datetime(params['DepartureDate']),
+            'TrainNumber': params['TrainNumber'],
             'SpecialPlacesDemand': params.get(
                 'SpecialPlacesDemand',
                 'StandardPlacesAndForDisabledPersons',

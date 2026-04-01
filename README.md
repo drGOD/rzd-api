@@ -87,7 +87,13 @@ tickets = client.search_tickets(
 )
 
 for train in tickets[:3]:
-    print(train['number'], train['route0'], train['route1'], train['time0'], train['time1'])
+    print(
+        train.get('TrainNumber') or train.get('DisplayTrainNumber'),
+        train.get('OriginStationName'),
+        train.get('DestinationStationName'),
+        train.get('DepartureDateTime') or train.get('LocalDepartureDateTime'),
+        train.get('ArrivalDateTime') or train.get('LocalArrivalDateTime'),
+    )
 
 # Туда-обратно
 round_trip = client.search_tickets(
@@ -96,6 +102,7 @@ round_trip = client.search_tickets(
     departure_date='01.04.2026',
     return_date='05.04.2026',
 )
+print('Туда:', len(round_trip['forward']), 'Обратно:', len(round_trip['back']))
 
 # Поиск станций и получение кода
 stations = client.find_stations('Чеб')
@@ -128,17 +135,15 @@ config = Config(
 
 api = Api(config)   # config необязателен
 
-tomorrow = (datetime.now() + timedelta(days=1)).strftime('%d.%m.%Y')
+tomorrow = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%dT00:00:00')
 
 # Маршруты Санкт-Петербург → Москва
 routes = api.train_routes({
-    'dir':        0,          # 0 — в одну сторону
-    'tfl':        3,          # 3 — поезда и электрички, 1 — только поезда, 2 — только электрички
-    'checkSeats': 1,          # 1 — только с билетами, 0 — все поезда
-    'code0':      '2004000',  # код станции отправления
-    'code1':      '2000000',  # код станции прибытия
-    'dt0':        tomorrow,   # дата отправления dd.mm.yyyy
-    'md':         0,          # 0 — без пересадок, 1 — с пересадками
+    'origin': '2004000',      # код станции отправления
+    'destination': '2000000', # код станции прибытия
+    'departureDate': tomorrow,
+    'adultPassengersQuantity': 1,
+    'childrenPassengersQuantity': 0,
 })
 print(routes)   # JSON-строка
 ```
@@ -155,10 +160,10 @@ print(routes)   # JSON-строка
 | Метод | Описание |
 |---|---|
 | `search_tickets(from_station, to_station, departure_date, return_date=None, *, only_with_seats=True, include_transfers=False, transport_type='all')` | Удобный поиск билетов |
-| `find_stations(query, compact_mode='y')` | Поиск станций по части названия |
+| `find_stations(query, transport_type='rail,suburban', group_results=True)` | Поиск станций по части названия |
 | `resolve_station_code(station)` | Получить код станции по названию или вернуть переданный код |
 | `get_carriages(from_station, to_station, departure_date, departure_time, train_number)` | Вагоны и свободные места |
-| `get_route_stations(train_number, departure_date)` | Список станций маршрута |
+| `get_route_stations(object_id)` | Список станций маршрута |
 
 #### `search_tickets`
 
@@ -192,37 +197,37 @@ print(routes)   # JSON-строка
 
 | Параметр | Описание |
 |---|---|
-| `code0` | Код станции отправления |
-| `code1` | Код станции прибытия |
-| `dt0` | Дата отправления `dd.mm.yyyy` |
-| `dt1` | Дата возврата `dd.mm.yyyy` (только для `train_routes_return`) |
-| `dir` | `0` — в одну сторону, `1` — туда-обратно |
-| `tfl` | `1` — поезда, `2` — электрички, `3` — всё |
-| `checkSeats` | `1` — только с билетами, `0` — все |
-| `md` | `0` — без пересадок, `1` — с пересадками |
+| `origin` | Код станции отправления |
+| `destination` | Код станции прибытия |
+| `departureDate` | Дата/время отправления в ISO, например `2026-04-13T00:00:00` |
+| `returnDate` | Дата/время возврата в ISO (только для `train_routes_return`) |
+| `adultPassengersQuantity` | Количество взрослых пассажиров |
+| `childrenPassengersQuantity` | Количество детей |
+| `service_provider` | Провайдер, обычно `B2B_RZD` |
 
 #### `train_carriages`
 
 | Параметр | Описание |
 |---|---|
-| `code0` / `code1` | Коды станций |
-| `dt0` | Дата отправления `dd.mm.yyyy` |
-| `time0` | Время отправления `HH:MM` |
-| `tnum0` | Номер поезда (например `054Г`) |
+| `OriginCode` / `DestinationCode` | Коды станций |
+| `DepartureDate` | Дата/время отправления в ISO |
+| `TrainNumber` | Номер поезда (например `054Г`) |
+| `CarNumber` | Номер вагона |
+| `Provider` | Код провайдера, обычно `P1` |
 
 #### `train_station_list`
 
 | Параметр | Описание |
 |---|---|
-| `trainNumber` | Номер поезда (например `054Г`) |
-| `depDate` | Дата отправления `dd.mm.yyyy` |
+| `id` | Идентификатор объекта для endpoint `/getobject` |
 
 #### `station_code`
 
 | Параметр | Описание |
 |---|---|
 | `stationNamePart` | Часть названия станции (мин. 2 символа, например `ЧЕБ`) |
-| `compactMode` | Формат ответа, по умолчанию `y` |
+| `transportType` | Типы транспорта, по умолчанию `rail,suburban` |
+| `groupResults` | Группировка результатов, по умолчанию `true` |
 
 ### `Config`
 

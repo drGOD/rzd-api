@@ -16,13 +16,13 @@ class FakeQuery:
         })
 
         if path.endswith('/railway-service/prices/train-pricing'):
-            return {'data': {'trains': [{'number': '001А'}]}}
+            return {'data': {'trains': [{'TrainNumber': '001А'}]}}
         if path.endswith('/suggests'):
             return [{'n': 'МОСКВА', 'c': '2000000'}]
         if path.endswith('/railway/car/place/prices'):
-            return {'cars': [{'cnumber': '03'}]}
+            return {'cars': [{'CarNumber': '03'}]}
         if path.endswith('/getobject'):
-            return {'trainInfo': {'number': '054Г'}, 'routes': []}
+            return {'trainInfo': {'TrainNumber': '054Г'}, 'routes': []}
         return {}
 
 
@@ -36,12 +36,12 @@ def test_train_routes_uses_new_endpoint_and_returns_json():
     api = make_api()
 
     result = json.loads(api.train_routes({
-        'code0': '2004000',
-        'code1': '2000000',
-        'dt0': '03.04.2026',
+        'origin': '2004000',
+        'destination': '2000000',
+        'departureDate': '2026-04-03T00:00:00',
     }))
 
-    assert result[0]['number'] == '001А'
+    assert result[0]['TrainNumber'] == '001А'
     last = api.query.calls[-1]
     assert last['method'] == 'GET'
     assert last['path'].endswith('/api/v1/railway-service/prices/train-pricing')
@@ -53,10 +53,10 @@ def test_train_routes_uses_new_endpoint_and_returns_json():
 def test_train_routes_return_calls_pricing_twice():
     api = make_api()
     result = json.loads(api.train_routes_return({
-        'code0': '2004000',
-        'code1': '2000000',
-        'dt0': '03.04.2026',
-        'dt1': '07.04.2026',
+        'origin': '2004000',
+        'destination': '2000000',
+        'departureDate': '2026-04-03T00:00:00',
+        'returnDate': '2026-04-07T00:00:00',
     }))
 
     assert 'forward' in result
@@ -71,15 +71,14 @@ def test_train_routes_return_calls_pricing_twice():
 def test_train_carriages_uses_new_post_endpoint():
     api = make_api()
     result = json.loads(api.train_carriages({
-        'code0': '2004000',
-        'code1': '2000000',
-        'dt0': '03.04.2026',
-        'time0': '22:30',
-        'tnum0': '751А',
+        'OriginCode': '2004000',
+        'DestinationCode': '2000000',
+        'DepartureDate': '2026-04-03T22:30:00',
+        'TrainNumber': '751А',
         'CarNumber': '03',
     }))
 
-    assert result['cars'][0]['cnumber'] == '03'
+    assert result['cars'][0]['CarNumber'] == '03'
     last = api.query.calls[-1]
     assert last['method'] == 'POST'
     assert last['path'].endswith('/api/v1/railway/car/place/prices')
@@ -92,11 +91,10 @@ def test_train_carriages_uses_new_post_endpoint():
 def test_train_station_list_uses_getobject():
     api = make_api()
     result = json.loads(api.train_station_list({
-        'trainNumber': '054Г',
-        'depDate': '03.04.2026',
+        'id': '054Г',
     }))
 
-    assert result['train']['number'] == '054Г'
+    assert result['train']['TrainNumber'] == '054Г'
     last = api.query.calls[-1]
     assert last['method'] == 'GET'
     assert last['path'].endswith('/api/v1/getobject')
