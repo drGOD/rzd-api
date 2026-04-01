@@ -1,5 +1,6 @@
 import logging
-import time
+from typing import Any
+
 import requests
 import urllib3
 
@@ -25,11 +26,15 @@ class Query:
             from http.client import HTTPConnection
             HTTPConnection.debuglevel = 1
 
-        headers = {'Accept': 'application/json'}
-        if config.user_agent:
-            headers['User-Agent'] = config.user_agent
-        if config.referer:
-            headers['Referer'] = config.referer
+        headers = {
+            'Accept': 'application/json, text/plain, */*',
+            'User-Agent': config.user_agent or (
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+                'AppleWebKit/537.36 (KHTML, like Gecko) '
+                'Chrome/146.0.0.0 Safari/537.36'
+            ),
+            'Referer': config.referer or 'https://ticket.rzd.ru/',
+        }
         self.session.headers.update(headers)
 
         if config.proxy:
@@ -38,49 +43,61 @@ class Query:
                 'https': config.proxy,
             }
 
-    def get(self, path: str, params: dict, method: str = 'POST') -> dict | list:
-        return self._run(path, params, method)
+    def get(
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
+        method: str = 'POST',
+        json_body: dict[str, Any] | None = None,
+    ) -> dict | list:
+        return self._run(path, params or {}, method, json_body)
 
-    def _run(self, path: str, params: dict, method: str) -> dict | list:
-        rid = None
-        content = None
+    def _run(
+        self,
+        path: str,
+        params: dict[str, Any],
+        method: str,
+        json_body: dict[str, Any] | None = None,
+    ) -> dict | list:
+        request_params = dict(params)
+        logger.debug('%s %s params=%s', method, path, request_params)
 
-        for attempt in range(10):
-            request_params = dict(params)
-            if rid is not None:
-                request_params['rid'] = rid
-
-            logger.debug('[attempt %d] %s %s params=%s', attempt + 1, method, path, request_params)
-
+        try:
             if method == 'GET':
                 response = self.session.get(path, params=request_params, timeout=self.config.timeout)
             else:
-                response = self.session.post(path, data=request_params, timeout=self.config.timeout)
+                if json_body is not None:
+                    response = self.session.post(
+                        path,
+                        params=request_params,
+                        json=json_body,
+                        timeout=self.config.timeout,
+                    )
+                else:
+                    response = self.session.post(path, data=request_params, timeout=self.config.timeout)
+        except requests.RequestException as exc:
+            raise RzdException(f'Request failed: {exc}') from exc
 
+        try:
             response.raise_for_status()
+        except requests.HTTPError as exc:
+            body_preview = response.text[:300].strip()
+            raise RzdException(f'HTTP {response.status_code}: {body_preview}') from exc
+
+        try:
             content = response.json()
+        except ValueError as exc:
+            body_preview = response.text[:300].strip()
+            raise RzdException(f'Unexpected non-JSON response: {body_preview}') from exc
 
-            result = content.get('result', 'OK') if isinstance(content, dict) else 'OK'
-            logger.debug('[attempt %d] result=%s', attempt + 1, result)
+        if isinstance(content, dict):
+            error_info = content.get('errorInfo')
+            if isinstance(error_info, dict) and error_info.get('Code') not in (None, 0):
+                message = error_info.get('Message') or 'RZD API returned an error.'
+                raise RzdException(f"RZD API error {error_info.get('Code')}: {message}")
 
-            if result in ('RID', 'REQUEST_ID'):
-                rid = self._get_rid(content)
-                time.sleep(1)
-            elif result == 'OK':
-                try:
-                    msg = content['tp'][0]['msgList'][0]['message']
-                    raise RzdException(msg)
-                except (KeyError, IndexError, TypeError):
-                    pass
-                return content
-            else:
-                msg = content.get('message', 'Failed to get request data!') if isinstance(content, dict) else 'Failed to get request data!'
-                raise RzdException(msg)
+            message = content.get('message')
+            if isinstance(message, str) and message:
+                raise RzdException(message)
 
         return content
-
-    def _get_rid(self, content: dict) -> str:
-        for key in ('rid', 'RID'):
-            if key in content:
-                return str(content[key])
-        raise RzdException('Rid not found!')
