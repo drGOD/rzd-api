@@ -109,13 +109,23 @@ stations = client.find_stations('Чеб')
 code = client.resolve_station_code('Москва')
 
 # Детали по вагонам
-cars = client.get_carriages(
-    from_station='Санкт-Петербург',
-    to_station='Москва',
-    departure_date='01.04.2026',
-    departure_time='22:30',
-    train_number='054А',
-)
+if tickets:
+    first_train = tickets[0]
+    dep_time = (first_train.get('DepartureDateTime') or first_train.get('LocalDepartureDateTime'))[11:16]
+    train_no = first_train.get('TrainNumber') or first_train.get('DisplayTrainNumber')
+
+    try:
+        cars = client.get_carriages(
+            from_station='Санкт-Петербург',
+            to_station='Москва',
+            departure_date='01.04.2026',
+            departure_time=dep_time,
+            train_number=train_no,
+            car_number='01',  # для этого endpoint нужен конкретный номер вагона
+        )
+        print(cars.get('cars'))
+    except Exception as exc:
+        print('Не удалось получить вагоны/места:', exc)
 ```
 
 ### Низкоуровневый API
@@ -162,7 +172,7 @@ print(routes)   # JSON-строка
 | `search_tickets(from_station, to_station, departure_date, return_date=None, *, only_with_seats=True, include_transfers=False, transport_type='all')` | Удобный поиск билетов |
 | `find_stations(query, transport_type='rail,suburban', group_results=True)` | Поиск станций по части названия |
 | `resolve_station_code(station)` | Получить код станции по названию или вернуть переданный код |
-| `get_carriages(from_station, to_station, departure_date, departure_time, train_number)` | Вагоны и свободные места |
+| `get_carriages(from_station, to_station, departure_date, departure_time, train_number, *, car_number='01', provider='P1')` | Вагоны и свободные места |
 | `get_route_stations(object_id)` | Список станций маршрута |
 
 #### `search_tickets`

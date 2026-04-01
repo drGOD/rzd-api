@@ -56,13 +56,30 @@ class RzdClient:
         departure_date: str | date | datetime,
         departure_time: str,
         train_number: str,
+        *,
+        car_number: str = '01',
+        provider: str = 'P1',
     ) -> dict[str, Any]:
-        """Fetch carriage information for a train."""
+        """Fetch carriage information for a train and specific carriage."""
+        origin = self.resolve_station_code(from_station)
+        destination = self.resolve_station_code(to_station)
+        departure_dt = self._to_iso_datetime(departure_date, departure_time)
+
+        self._validate_train_exists(
+            origin=origin,
+            destination=destination,
+            departure_date=departure_date,
+            departure_time=departure_time,
+            train_number=train_number,
+        )
+
         params = {
-            'OriginCode': self.resolve_station_code(from_station),
-            'DestinationCode': self.resolve_station_code(to_station),
-            'DepartureDate': self._to_iso_datetime(departure_date, departure_time),
+            'OriginCode': origin,
+            'DestinationCode': destination,
+            'DepartureDate': departure_dt,
             'TrainNumber': train_number,
+            'CarNumber': car_number,
+            'Provider': provider,
         }
         return self.api.train_carriages_data(params)
 
@@ -138,3 +155,62 @@ class RzdClient:
             raise ValueError(
                 f'Unsupported transport_type: {transport_type}. Use one of: {allowed}.'
             ) from exc
+
+    def _validate_train_exists(
+        self,
+        *,
+        origin: str,
+        destination: str,
+        departure_date: str | date | datetime,
+        departure_time: str,
+        train_number: str,
+    ) -> None:
+        trains = self.api.train_routes_data({
+            'origin': origin,
+            'destination': destination,
+            'departureDate': self._to_iso_datetime(departure_date),
+            'adultPassengersQuantity': 1,
+            'childrenPassengersQuantity': 0,
+        })
+
+        normalized_target = self._normalize_train_number(train_number)
+        requested_time = departure_time.strip()[:5]
+
+        matched_by_number: list[dict[str, Any]] = []
+        for train in trains:
+            current_number = self._normalize_train_number(
+                str(train.get('TrainNumber') or train.get('DisplayTrainNumber') or ''),
+            )
+            if current_number == normalized_target:
+                matched_by_number.append(train)
+
+        if not matched_by_number:
+            available = [
+                str(t.get('TrainNumber') or t.get('DisplayTrainNumber') or '?')
+                for t in trains[:10]
+            ]
+            raise RzdException(
+                f'Train {train_number} is not found for selected route/date. '
+                f'Available examples: {", ".join(available) if available else "none"}.'
+            )
+
+        for train in matched_by_number:
+            dep = str(train.get('DepartureDateTime') or train.get('LocalDepartureDateTime') or '')
+            if not dep:
+                return
+            time_part = dep[11:16] if len(dep) >= 16 else ''
+            if time_part == requested_time:
+                return
+
+        available_times = []
+        for train in matched_by_number:
+            dep = str(train.get('DepartureDateTime') or train.get('LocalDepartureDateTime') or '')
+            if len(dep) >= 16:
+                available_times.append(dep[11:16])
+        raise RzdException(
+            f'Train {train_number} is found, but not at {requested_time}. '
+            f'Available times: {", ".join(available_times) if available_times else "unknown"}.'
+        )
+
+    def _normalize_train_number(self, value: str) -> str:
+        return ''.join(value.split()).upper()

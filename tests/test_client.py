@@ -11,7 +11,7 @@ class FakeApi:
 
     def train_routes_data(self, params):
         self.calls.append(('train_routes_data', params))
-        return [{'TrainNumber': '001A'}]
+        return [{'TrainNumber': '001A', 'DepartureDateTime': '2026-04-03T22:30:00'}]
 
     def train_routes_return_data(self, params):
         self.calls.append(('train_routes_return_data', params))
@@ -44,7 +44,7 @@ def client():
 def test_search_tickets_by_station_names(client):
     result = client.search_tickets('Санкт-Петербург', 'Москва', date(2026, 4, 3))
 
-    assert result == [{'TrainNumber': '001A'}]
+    assert result[0]['TrainNumber'] == '001A'
     method, params = client.api.calls[-1]
     assert method == 'train_routes_data'
     assert params == {
@@ -90,6 +90,18 @@ def test_get_carriages_uses_resolved_codes(client):
     assert params['DestinationCode'] == '2000000'
     assert params['DepartureDate'] == '2026-04-03T22:30:00'
     assert params['TrainNumber'] == '001A'
+    assert params['CarNumber'] == '01'
+    assert params['Provider'] == 'P1'
+
+
+def test_get_carriages_raises_for_unknown_train(client):
+    with pytest.raises(RzdException, match='is not found'):
+        client.get_carriages('Петер', 'Москва', '03.04.2026', '22:30', '999A')
+
+
+def test_get_carriages_raises_for_wrong_departure_time(client):
+    with pytest.raises(RzdException, match='Available times'):
+        client.get_carriages('Петер', 'Москва', '03.04.2026', '21:30', '001A')
 
 
 def test_get_route_stations_formats_date(client):

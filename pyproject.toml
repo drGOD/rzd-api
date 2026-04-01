@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rzd-api"
-version = "1.2.0"
+version = "1.2.1"
 description = "Python client for RZD (Russian Railways) ticket.rzd.ru API"
 readme = "README.md"
 requires-python = ">=3.10"
