@@ -1,17 +1,32 @@
-.PHONY: install test run docker-build docker-up docker-down
+.PHONY: install test coverage lint typecheck check build run docker-build docker-up docker-down
 
 install:
-	pip install -e ".[dev]"
+	python -m pip install -e ".[dev]"
 
 test:
-	pytest tests/ -v
+	python -m pytest tests/ -m "not integration" -q
+
+coverage:
+	python -m pytest tests/ -m "not integration" --cov --cov-report=term-missing
+
+lint:
+	ruff check .
+	ruff format --check .
+
+typecheck:
+	mypy
+
+check: lint typecheck coverage build
+
+build:
+	python -m build
+	twine check dist/*
 
 run:
-	pip install -e ".[mcp]"
 	rzd-mcp-server
 
 docker-build:
-	docker build -t rzd-api .
+	docker build -t rzd-api:2.0.0 .
 
 docker-up:
 	docker compose up -d

@@ -1,0 +1,25 @@
+name: Live RZD smoke
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - name: Station and direct-route smoke
+        env:
+          RZD_LIVE_TEST: "1"
+        run: python -m pytest tests/integration/test_live_api.py -m integration -v

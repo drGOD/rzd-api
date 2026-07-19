@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install project
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+      - name: Unit tests and coverage
+        run: python -m pytest tests/ -m "not integration" --cov --cov-report=term-missing
+      - name: Ruff
+        if: matrix.python-version == '3.12'
+        run: ruff check . && ruff format --check .
+      - name: Mypy
+        if: matrix.python-version == '3.12'
+        run: mypy
+      - name: Build and metadata
+        if: matrix.python-version == '3.12'
+        run: python -m build && twine check dist/*
+      - name: Dependency audit
+        if: matrix.python-version == '3.12'
+        run: pip-audit
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker:
+    name: Docker and MCP protocol
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install MCP test client
+        run: python -m pip install -e ".[dev]"
+      - name: Build image
+        run: docker build -t rzd-api:ci .
+      - name: Start container
+        run: >-
+          docker run -d --name rzd-api-ci -p 127.0.0.1:18000:8000
+          -e MCP_AUTH_TOKEN=ci-token-00000000000000000000000000000000
+          rzd-api:ci
+      - name: Wait for healthcheck
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18000/health; then exit 0; fi
+            sleep 1
+          done
+          docker logs rzd-api-ci
+          exit 1
+      - name: MCP initialize and list tools
+        env:
+          MCP_TEST_URL: http://127.0.0.1:18000/mcp
+          MCP_AUTH_TOKEN: ci-token-00000000000000000000000000000000
+        run: python -m pytest tests/integration/test_mcp_container.py -m integration -v
+      - name: Container logs
+        if: always()
+        run: docker logs rzd-api-ci || true
+      - name: Stop container
+        if: always()
+        run: docker stop rzd-api-ci || true
