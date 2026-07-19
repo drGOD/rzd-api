@@ -13,4 +13,3 @@ tests
 .coverage
 docker-compose.yml
 Makefile
-README.md

@@ -1,14 +1,15 @@
 [build-system]
-requires = ["setuptools>=69.0", "wheel"]
+requires = ["setuptools>=77.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "rzd-api"
-version = "1.2.1"
-description = "Python client for RZD (Russian Railways) ticket.rzd.ru API"
+version = "2.0.0"
+description = "Typed Python client and MCP server for the unofficial ticket.rzd.ru API"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     {name = "drgod"},
 ]
@@ -16,7 +17,6 @@ keywords = ["rzd", "railway", "trains", "tickets", "api", "mcp"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -26,19 +26,29 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
     "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
 ]
 dependencies = [
-    "requests>=2.31.0",
-    "urllib3>=2.0.0",
+    "requests>=2.31,<3",
+    "urllib3>=2,<3",
 ]
 
 [project.optional-dependencies]
 mcp = [
-    "mcp>=1.0.0",
+    "mcp>=1.28.1,<1.29",
+    "uvicorn>=0.51,<0.52",
 ]
 dev = [
-    "pytest>=7.0.0",
-    "rzd-api[mcp]",
+    "build>=1.3,<2",
+    "mcp>=1.28.1,<1.29",
+    "mypy>=1.18,<2",
+    "pip-audit>=2.9,<3",
+    "pytest>=9,<10",
+    "pytest-cov>=7,<8",
+    "ruff>=0.14,<0.15",
+    "twine>=6.2,<7",
+    "types-requests>=2.31,<3",
+    "uvicorn>=0.51,<0.52",
 ]
 
 [project.scripts]
@@ -53,5 +63,39 @@ Issues = "https://github.com/drGOD/rzd-api/issues"
 where = ["."]
 include = ["rzd_api*", "mcp_server*"]
 
+[tool.setuptools.package-data]
+rzd_api = ["py.typed"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
+addopts = "--strict-markers"
+markers = [
+    "integration: calls the live ticket.rzd.ru API and is opt-in",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["rzd_api", "mcp_server"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.mypy]
+python_version = "3.10"
+check_untyped_defs = true
+disallow_incomplete_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+packages = ["rzd_api", "mcp_server"]

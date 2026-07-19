@@ -1,7 +1,3 @@
-# PHP
-/vendor
-.idea
-
 # Python
 __pycache__/
 *.py[cod]
@@ -20,3 +16,7 @@ env/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Tooling and local runtime
+.mypy_cache/
+.ruff_cache/
