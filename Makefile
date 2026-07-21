@@ -26,7 +26,7 @@ run:
 	rzd-mcp-server
 
 docker-build:
-	docker build -t rzd-api:2.0.0 .
+	docker build -t rzd-api:3.0.0 .
 
 docker-up:
 	docker compose up -d

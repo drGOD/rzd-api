@@ -6,8 +6,11 @@ from typing import Any
 import pytest
 
 from rzd_api import (
+    CarImagesResult,
     CarriageResult,
+    CarScheme,
     Config,
+    MinimalPricingResult,
     RoundTripResult,
     RouteStationsResult,
     RzdAmbiguousStationError,
@@ -16,6 +19,7 @@ from rzd_api import (
     RzdStationNotFoundError,
     RzdValidationError,
     Station,
+    TrainAvailabilityResult,
     TrainRoute,
 )
 
@@ -68,6 +72,24 @@ class FakeApi:
     def get_carriages(self, **kwargs: Any) -> CarriageResult:
         self.calls.append(("get_carriages", kwargs))
         return CarriageResult(raw={})
+
+    def get_train_availability(self, **kwargs: Any) -> TrainAvailabilityResult:
+        self.calls.append(("get_train_availability", kwargs))
+        return TrainAvailabilityResult("1", "2", raw={})
+
+    def get_minimal_pricing(self, **kwargs: Any) -> MinimalPricingResult:
+        self.calls.append(("get_minimal_pricing", kwargs))
+        return MinimalPricingResult("1", "2", raw={})
+
+    def get_car_scheme(self, **kwargs: Any) -> CarScheme:
+        self.calls.append(("get_car_scheme", kwargs))
+        return CarScheme(
+            None, None, None, None, None, None, None, None, None, None, None, None, None
+        )
+
+    def get_car_images(self, **kwargs: Any) -> CarImagesResult:
+        self.calls.append(("get_car_images", kwargs))
+        return CarImagesResult(None, None, raw={})
 
     def get_route_stations(self, **kwargs: Any) -> RouteStationsResult:
         self.calls.append(("get_route_stations", kwargs))
@@ -232,8 +254,6 @@ def test_exact_station_with_duplicate_code_is_not_ambiguous(
 
 def test_get_carriages_validates_train_and_calls_endpoint(client: RzdClient, api: FakeApi) -> None:
     target = future_date(30)
-    departure = f"{target.isoformat()}T22:30:00"
-    api.routes = [route(departure=departure)]
     result = client.get_carriages("1", "2", target, "22:30", "001A")
     assert isinstance(result, CarriageResult)
     assert api.calls[-1][0] == "get_carriages"
@@ -246,22 +266,49 @@ def test_get_carriages_rejects_invalid_inputs(client: RzdClient, api: FakeApi) -
         client.get_carriages("1", "2", target, "25:00", "001A")
     with pytest.raises(RzdValidationError, match="must not be empty"):
         client.get_carriages("1", "2", target, "22:30", "")
-    with pytest.raises(RzdValidationError, match="not found"):
-        client.get_carriages("1", "2", target, "22:30", "999A")
+    with pytest.raises(RzdValidationError, match="different"):
+        client.get_carriages("1", "1", target, "22:30", "001A")
 
-    api.routes = [route(departure=f"{target.isoformat()}T21:00:00")]
-    with pytest.raises(RzdValidationError, match="Available times"):
-        client.get_carriages("1", "2", target, "22:30", "001A")
 
-    api.routes = [route(departure="bad")]
-    with pytest.raises(RzdSchemaError, match="departure time"):
-        client.get_carriages("1", "2", target, "22:30", "001A")
+def test_availability_and_minimal_prices_validate_dates(client: RzdClient, api: FakeApi) -> None:
+    start = future_date(10)
+    end = future_date(20)
+    client.get_train_availability("1", "2", start, end)
+    assert api.calls[-1] == (
+        "get_train_availability",
+        {
+            "origin": "1",
+            "destination": "2",
+            "date_from": start.isoformat(),
+            "date_to": end.isoformat(),
+        },
+    )
+    client.get_minimal_prices("1", "2", start)
+    assert api.calls[-1][0] == "get_minimal_pricing"
+    with pytest.raises(RzdValidationError, match="earlier"):
+        client.get_train_availability("1", "2", end, start)
+
+
+def test_car_metadata_methods_validate_and_forward(client: RzdClient, api: FakeApi) -> None:
+    target = future_date()
+    args = (target, "22:30", "001A", "03", "01К", "2Э", "ФПК")
+    client.get_car_scheme(*args)
+    assert api.calls[-1][0] == "get_car_scheme"
+    assert api.calls[-1][1]["departure_date"].endswith("T22:30:00")
+    client.get_car_images(*args, car_numeration="FromTail")
+    assert api.calls[-1][0] == "get_car_images"
+    assert api.calls[-1][1]["car_numeration"] == "FromTail"
+    with pytest.raises(RzdValidationError, match="car_number"):
+        client.get_car_scheme(target, "22:30", "001A", "", "01К", "2Э", "ФПК")
 
 
 def test_route_stations_and_client_lifecycle(client: RzdClient, api: FakeApi) -> None:
-    assert client.get_route_stations("object").train_number == "001A"
-    with pytest.raises(RzdValidationError):
-        client.get_route_stations(" ")
+    target = future_date()
+    result = client.get_route_stations("1", "2", target, "22:30", "001A")
+    assert result.train_number == "001A"
+    assert api.calls[-1][1]["departure_date"].endswith("T22:30:00")
+    with pytest.raises(RzdValidationError, match="must not be empty"):
+        client.get_route_stations("1", "2", target, "22:30", "")
 
     client.close()
     client.close()

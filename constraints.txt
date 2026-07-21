@@ -1,4 +1,4 @@
-# Complete runtime graph verified for the 2.0.0 container image.
+# Complete runtime graph verified for the 3.0.0 container image.
 annotated-types==0.7.0
 anyio==4.14.2
 attrs==26.1.0

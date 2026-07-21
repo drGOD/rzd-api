@@ -9,6 +9,7 @@ class Config:
 
     language: str = "ru"
     base_url: str = "https://ticket.rzd.ru/api/v1"
+    b2b_base_url: str | None = None
     connect_timeout: float = 5.0
     read_timeout: float = 20.0
     retry_total: int = 3
@@ -26,6 +27,11 @@ class Config:
             ("http://", "https://")
         ):
             raise ValueError("base_url must be an absolute HTTP(S) URL.")
+        if self.b2b_base_url is not None and (
+            not isinstance(self.b2b_base_url, str)
+            or not self.b2b_base_url.startswith(("http://", "https://"))
+        ):
+            raise ValueError("b2b_base_url must be an absolute HTTP(S) URL or None.")
         if not self._is_number(self.connect_timeout) or not self._is_number(self.read_timeout):
             raise ValueError("connect_timeout and read_timeout must be numbers.")
         if self.connect_timeout <= 0 or self.read_timeout <= 0:

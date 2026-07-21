@@ -21,6 +21,7 @@ from rzd_api import (
     [
         {"language": "de"},
         {"base_url": "relative"},
+        {"b2b_base_url": "relative"},
         {"connect_timeout": 0},
         {"read_timeout": -1},
         {"retry_total": -1},
@@ -49,6 +50,11 @@ def test_models_serialize_recursively() -> None:
     assert serialized["forward"][0]["car_groups"][0]["available_places"] == 2
     assert serialized["forward"][0]["raw"] == {"train": True}
     assert serialized["raw"]["forward"] == [{"train": True}]
+
+
+def test_config_accepts_separate_b2b_base_url() -> None:
+    config = Config(b2b_base_url="https://example.test/custom-b2b")
+    assert config.b2b_base_url == "https://example.test/custom-b2b"
 
 
 def test_exception_hierarchy() -> None:

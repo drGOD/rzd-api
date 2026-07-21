@@ -1,4 +1,4 @@
-# RZD API 2.0
+# RZD API
 
 Типизированный Python-клиент и MCP-сервер для неофициального API
 [`ticket.rzd.ru`](https://ticket.rzd.ru). Проект не связан с ОАО «РЖД»; внутренние
@@ -11,7 +11,8 @@ endpoint и схема ответов могут изменяться без п�
 
 - поиск прямых поездов в одну сторону и туда-обратно;
 - поиск станций по названию и синонимам;
-- информация о вагонах, местах и станциях маршрута;
+- календарь доступности и минимальные цены по датам;
+- информация о вагонах, местах, схемах, изображениях и станциях маршрута;
 - dataclass-модели с полным исходным объектом в `raw`;
 - MCP через `stdio` и защищённый `streamable-http`;
 - retries, раздельные таймауты и кэш поиска станций.
@@ -67,7 +68,34 @@ with RzdClient() as client:
 | `find_stations(query, ...)` | `list[Station]` |
 | `resolve_station_code(station)` | код станции |
 | `get_carriages(...)` | `CarriageResult` |
-| `get_route_stations(object_id)` | `RouteStationsResult` |
+| `get_train_availability(...)` | `TrainAvailabilityResult` |
+| `get_minimal_prices(...)` | `MinimalPricingResult` |
+| `get_car_scheme(...)` | `CarScheme` |
+| `get_car_images(...)` | `CarImagesResult` |
+| `get_route_stations(...)` | `RouteStationsResult` |
+
+`get_carriages()` использует актуальный `CarPricing` и сразу возвращает все вагоны
+поезда. `car_number` этому методу больше не передаётся. Значения `number`,
+`car_sub_type`, `service_class`, `carrier` и `numeration` из выбранного `Carriage`
+можно передать в `get_car_scheme()` и `get_car_images()`.
+
+```python
+with RzdClient() as client:
+    carriages = client.get_carriages(
+        "2001025", "2004001", departure, "00:48", "059Г"
+    )
+    car = carriages.cars[0]
+    scheme = client.get_car_scheme(
+        departure,
+        "00:48",
+        car.train_number or "059Г",
+        car.number or "",
+        car.car_sub_type or "",
+        car.service_class or "",
+        car.carrier or "",
+        car_numeration=car.numeration or "FromHead",
+    )
+```
 
 `only_with_seats=True` фильтрует по доступности мест из `CarGroups`. Современный
 pricing endpoint не поддерживает маршруты с пересадками и фильтр типа транспорта,
@@ -81,6 +109,8 @@ from rzd_api import Config, RzdClient
 
 config = Config(
     language="ru",
+    # По умолчанию выводится из base_url.
+    b2b_base_url=None,
     connect_timeout=5,
     read_timeout=20,
     retry_total=3,
@@ -98,7 +128,8 @@ station-not-found и ambiguous-station.
 ## MCP
 
 Инструменты: `search_tickets`, `find_stations`, `get_carriages`,
-`get_route_stations`.
+`get_train_availability`, `get_minimal_prices`, `get_car_scheme`,
+`get_car_images`, `get_route_stations`.
 
 Локальный stdio:
 

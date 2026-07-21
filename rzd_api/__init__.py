@@ -12,20 +12,32 @@ from .exceptions import (
 )
 from .models import (
     CarGroup,
+    CarImage,
+    CarImagesResult,
     Carriage,
     CarriageResult,
+    CarScheme,
+    MinimalPrice,
+    MinimalPricingResult,
     RoundTripResult,
     RouteStation,
     RouteStationsResult,
     Station,
+    TrainAvailability,
+    TrainAvailabilityResult,
     TrainRoute,
 )
 
 __all__ = [
     "CarGroup",
+    "CarImage",
+    "CarImagesResult",
+    "CarScheme",
     "Carriage",
     "CarriageResult",
     "Config",
+    "MinimalPrice",
+    "MinimalPricingResult",
     "RoundTripResult",
     "RouteStation",
     "RouteStationsResult",
@@ -39,5 +51,7 @@ __all__ = [
     "RzdTransportError",
     "RzdValidationError",
     "Station",
+    "TrainAvailability",
+    "TrainAvailabilityResult",
     "TrainRoute",
 ]

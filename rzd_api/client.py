@@ -14,7 +14,17 @@ from .exceptions import (
     RzdStationNotFoundError,
     RzdValidationError,
 )
-from .models import CarriageResult, RoundTripResult, RouteStationsResult, Station, TrainRoute
+from .models import (
+    CarImagesResult,
+    CarriageResult,
+    CarScheme,
+    MinimalPricingResult,
+    RoundTripResult,
+    RouteStationsResult,
+    Station,
+    TrainAvailabilityResult,
+    TrainRoute,
+)
 
 MOSCOW_TIMEZONE = ZoneInfo("Europe/Moscow")
 
@@ -134,6 +144,43 @@ class RzdClient:
                 self._station_cache.popitem(last=False)
         return stations
 
+    def get_train_availability(
+        self,
+        from_station: str | int,
+        to_station: str | int,
+        date_from: str | date | datetime,
+        date_to: str | date | datetime,
+    ) -> TrainAvailabilityResult:
+        """Return dates on which RZD reports trains for the selected direction."""
+        self._ensure_open()
+        start = self._parse_datetime(date_from, "date_from")
+        end = self._parse_datetime(date_to, "date_to")
+        if end < start:
+            raise RzdValidationError("date_to must not be earlier than date_from.")
+        origin, destination = self._resolve_direction(from_station, to_station)
+        return self._api.get_train_availability(
+            origin=origin,
+            destination=destination,
+            date_from=start.date().isoformat(),
+            date_to=end.date().isoformat(),
+        )
+
+    def get_minimal_prices(
+        self,
+        from_station: str | int,
+        to_station: str | int,
+        date_from: str | date | datetime,
+    ) -> MinimalPricingResult:
+        """Return the minimum prices published by RZD from a selected date."""
+        self._ensure_open()
+        start = self._parse_datetime(date_from, "date_from")
+        origin, destination = self._resolve_direction(from_station, to_station)
+        return self._api.get_minimal_pricing(
+            origin=origin,
+            destination=destination,
+            date_from=start.date().isoformat(),
+        )
+
     def resolve_station_code(self, station: str | int) -> str:
         """Resolve a numeric code or a unique station name."""
         self._ensure_open()
@@ -175,7 +222,6 @@ class RzdClient:
         departure_time: str,
         train_number: str,
         *,
-        car_number: str = "01",
         provider: str = "P1",
     ) -> CarriageResult:
         """Fetch carriage and availability details for an existing train."""
@@ -187,80 +233,136 @@ class RzdClient:
             override_time=parsed_time,
         )
         normalized_train = str(train_number).strip()
-        normalized_car = str(car_number).strip()
         normalized_provider = str(provider).strip()
-        if not normalized_train or not normalized_car or not normalized_provider:
-            raise RzdValidationError("train_number, car_number and provider must not be empty.")
-        origin = self.resolve_station_code(from_station)
-        destination = self.resolve_station_code(to_station)
-        if origin == destination:
-            raise RzdValidationError("Origin and destination stations must be different.")
-
-        self._validate_train_exists(
-            origin=origin,
-            destination=destination,
-            departure=departure,
-            train_number=normalized_train,
-        )
+        if not normalized_train or not normalized_provider:
+            raise RzdValidationError("train_number and provider must not be empty.")
+        origin, destination = self._resolve_direction(from_station, to_station)
         return self._api.get_carriages(
             origin=origin,
             destination=destination,
             departure_date=self._format_datetime(departure),
             train_number=normalized_train,
-            car_number=normalized_car,
             provider=normalized_provider,
         )
 
-    def get_route_stations(self, object_id: str) -> RouteStationsResult:
-        """Fetch stations for a route object returned by RZD."""
-        self._ensure_open()
-        value = str(object_id).strip()
-        if not value:
-            raise RzdValidationError("object_id must not be empty.")
-        return self._api.get_route_stations(object_id=value)
-
-    def _validate_train_exists(
+    def get_car_scheme(
         self,
-        *,
-        origin: str,
-        destination: str,
-        departure: datetime,
+        departure_date: str | date | datetime,
+        departure_time: str,
         train_number: str,
-    ) -> None:
-        search_date = departure.replace(hour=0, minute=0, second=0, microsecond=0)
-        routes = self._api.get_train_routes(
+        car_number: str,
+        car_sub_type: str,
+        service_class: str,
+        carrier: str,
+        *,
+        car_numeration: str = "FromHead",
+    ) -> CarScheme:
+        """Fetch the scheme metadata for a carriage returned by ``get_carriages``."""
+        self._ensure_open()
+        params = self._car_metadata_input(
+            departure_date=departure_date,
+            departure_time=departure_time,
+            train_number=train_number,
+            car_number=car_number,
+            car_sub_type=car_sub_type,
+            service_class=service_class,
+            carrier=carrier,
+            car_numeration=car_numeration,
+        )
+        return self._api.get_car_scheme(**params)
+
+    def get_car_images(
+        self,
+        departure_date: str | date | datetime,
+        departure_time: str,
+        train_number: str,
+        car_number: str,
+        car_sub_type: str,
+        service_class: str,
+        carrier: str,
+        *,
+        car_numeration: str = "FromHead",
+    ) -> CarImagesResult:
+        """Fetch image metadata for a carriage returned by ``get_carriages``."""
+        self._ensure_open()
+        params = self._car_metadata_input(
+            departure_date=departure_date,
+            departure_time=departure_time,
+            train_number=train_number,
+            car_number=car_number,
+            car_sub_type=car_sub_type,
+            service_class=service_class,
+            carrier=carrier,
+            car_numeration=car_numeration,
+        )
+        return self._api.get_car_images(**params)
+
+    def get_route_stations(
+        self,
+        from_station: str | int,
+        to_station: str | int,
+        departure_date: str | date | datetime,
+        departure_time: str,
+        train_number: str,
+        *,
+        provider: str = "P1",
+    ) -> RouteStationsResult:
+        """Fetch all stops for a train and direction."""
+        self._ensure_open()
+        departure = self._parse_datetime(
+            departure_date,
+            "departure_date",
+            override_time=self._parse_time(departure_time),
+        )
+        normalized_train = str(train_number).strip()
+        normalized_provider = str(provider).strip()
+        if not normalized_train or not normalized_provider:
+            raise RzdValidationError("train_number and provider must not be empty.")
+        origin, destination = self._resolve_direction(from_station, to_station)
+        return self._api.get_route_stations(
             origin=origin,
             destination=destination,
-            departure_date=self._format_datetime(search_date),
-            adults=1,
-            children=0,
+            departure_date=self._format_datetime(departure),
+            train_number=normalized_train,
+            provider=normalized_provider,
         )
-        target_number = self._normalize_train_number(train_number)
-        matches = [
-            route
-            for route in routes
-            if self._normalize_train_number(route.number) == target_number
-            or self._normalize_train_number(route.display_number or "") == target_number
-        ]
-        if not matches:
-            available = ", ".join(route.number for route in routes[:10]) or "none"
-            raise RzdValidationError(
-                f"Train {train_number} was not found for the route/date. Available: {available}."
-            )
 
-        requested_time = departure.strftime("%H:%M")
-        known_times = [
-            route.departure_time[11:16]
-            for route in matches
-            if route.departure_time and len(route.departure_time) >= 16
-        ]
-        if requested_time not in known_times:
-            if not known_times:
-                raise RzdSchemaError("Matched train routes contain no departure time.")
-            raise RzdValidationError(
-                f"Train {train_number} is not available at {requested_time}. "
-                f"Available times: {', '.join(known_times)}."
-            )
+    def _resolve_direction(self, from_station: str | int, to_station: str | int) -> tuple[str, str]:
+        origin = self.resolve_station_code(from_station)
+        destination = self.resolve_station_code(to_station)
+        if origin == destination:
+            raise RzdValidationError("Origin and destination stations must be different.")
+        return origin, destination
+
+    def _car_metadata_input(
+        self,
+        *,
+        departure_date: str | date | datetime,
+        departure_time: str,
+        train_number: str,
+        car_number: str,
+        car_sub_type: str,
+        service_class: str,
+        carrier: str,
+        car_numeration: str,
+    ) -> dict[str, str]:
+        departure = self._parse_datetime(
+            departure_date,
+            "departure_date",
+            override_time=self._parse_time(departure_time),
+        )
+        values = {
+            "train_number": str(train_number).strip(),
+            "car_number": str(car_number).strip(),
+            "car_sub_type": str(car_sub_type).strip(),
+            "service_class": str(service_class).strip(),
+            "carrier": str(carrier).strip(),
+            "car_numeration": str(car_numeration).strip(),
+        }
+        empty = [name for name, value in values.items() if not value]
+        if empty:
+            raise RzdValidationError(f"{', '.join(empty)} must not be empty.")
+        return {"departure_date": self._format_datetime(departure), **values}
 
     @staticmethod
     def _filter_routes(routes: list[TrainRoute], only_with_seats: bool) -> list[TrainRoute]:
@@ -336,10 +438,6 @@ class RzdClient:
     @staticmethod
     def _format_datetime(value: datetime) -> str:
         return value.strftime("%Y-%m-%dT%H:%M:%S")
-
-    @staticmethod
-    def _normalize_train_number(value: str) -> str:
-        return "".join(value.split()).upper()
 
     @staticmethod
     def _unique_by_code(stations: list[Station]) -> list[Station]:

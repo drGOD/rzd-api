@@ -29,5 +29,9 @@ def test_stdio_protocol_initialize_list_and_call() -> None:
         "search_tickets",
         "find_stations",
         "get_carriages",
+        "get_train_availability",
+        "get_minimal_prices",
+        "get_car_scheme",
+        "get_car_images",
         "get_route_stations",
     }

@@ -67,7 +67,6 @@ def get_carriages(
     departure_date: str,
     departure_time: str,
     train_number: str,
-    car_number: str = "01",
     provider: str = "P1",
 ) -> dict[str, Any]:
     """Get typed carriage and seat availability details for a train."""
@@ -78,15 +77,97 @@ def get_carriages(
             departure_date,
             departure_time,
             train_number,
-            car_number=car_number,
             provider=provider,
         ).to_dict()
 
 
-def get_route_stations(object_id: str) -> dict[str, Any]:
-    """Get all stations for an RZD route object."""
+def get_train_availability(
+    from_station: str,
+    to_station: str,
+    date_from: str,
+    date_to: str,
+) -> dict[str, Any]:
+    """Get dates with available trains for a direction."""
     with RzdClient() as client:
-        return client.get_route_stations(object_id).to_dict()
+        return client.get_train_availability(from_station, to_station, date_from, date_to).to_dict()
+
+
+def get_minimal_prices(
+    from_station: str,
+    to_station: str,
+    date_from: str,
+) -> dict[str, Any]:
+    """Get the minimum published prices from a selected date."""
+    with RzdClient() as client:
+        return client.get_minimal_prices(from_station, to_station, date_from).to_dict()
+
+
+def get_car_scheme(
+    departure_date: str,
+    departure_time: str,
+    train_number: str,
+    car_number: str,
+    car_sub_type: str,
+    service_class: str,
+    carrier: str,
+    car_numeration: str = "FromHead",
+) -> dict[str, Any]:
+    """Get carriage scheme metadata."""
+    with RzdClient() as client:
+        return client.get_car_scheme(
+            departure_date,
+            departure_time,
+            train_number,
+            car_number,
+            car_sub_type,
+            service_class,
+            carrier,
+            car_numeration=car_numeration,
+        ).to_dict()
+
+
+def get_car_images(
+    departure_date: str,
+    departure_time: str,
+    train_number: str,
+    car_number: str,
+    car_sub_type: str,
+    service_class: str,
+    carrier: str,
+    car_numeration: str = "FromHead",
+) -> dict[str, Any]:
+    """Get carriage image metadata."""
+    with RzdClient() as client:
+        return client.get_car_images(
+            departure_date,
+            departure_time,
+            train_number,
+            car_number,
+            car_sub_type,
+            service_class,
+            carrier,
+            car_numeration=car_numeration,
+        ).to_dict()
+
+
+def get_route_stations(
+    from_station: str,
+    to_station: str,
+    departure_date: str,
+    departure_time: str,
+    train_number: str,
+    provider: str = "P1",
+) -> dict[str, Any]:
+    """Get all stations for a train and direction."""
+    with RzdClient() as client:
+        return client.get_route_stations(
+            from_station,
+            to_station,
+            departure_date,
+            departure_time,
+            train_number,
+            provider=provider,
+        ).to_dict()
 
 
 def create_mcp_app(*, host: str = "127.0.0.1", port: int = 8000) -> Any:
@@ -115,11 +196,15 @@ def create_mcp_app(*, host: str = "127.0.0.1", port: int = 8000) -> Any:
     app.tool()(search_tickets)
     app.tool()(find_stations)
     app.tool()(get_carriages)
+    app.tool()(get_train_availability)
+    app.tool()(get_minimal_prices)
+    app.tool()(get_car_scheme)
+    app.tool()(get_car_images)
     app.tool()(get_route_stations)
 
     @app.custom_route("/health", methods=["GET"], include_in_schema=False)
     async def health(_: Request) -> JSONResponse:
-        return JSONResponse({"status": "ok", "service": "rzd-api", "version": "2.0.0"})
+        return JSONResponse({"status": "ok", "service": "rzd-api", "version": "3.0.0"})
 
     return app
 
