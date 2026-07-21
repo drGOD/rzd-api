@@ -74,19 +74,23 @@ def test_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "example.com:*" in server._allowed_hosts("example.com")
 
 
-def test_create_mcp_app_exposes_health_and_four_tools() -> None:
+def test_create_mcp_app_exposes_health_and_tools() -> None:
     app = server.create_mcp_app()
     tools = app._tool_manager.list_tools()
     assert {tool.name for tool in tools} == {
         "search_tickets",
         "find_stations",
         "get_carriages",
+        "get_train_availability",
+        "get_minimal_prices",
+        "get_car_scheme",
+        "get_car_images",
         "get_route_stations",
     }
     http_app = server.build_http_app(app, token=None, rate_limit=60)
     response = request(http_app, path="/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "service": "rzd-api", "version": "2.0.0"}
+    assert response.json() == {"status": "ok", "service": "rzd-api", "version": "3.0.0"}
 
 
 class FakeRunApp:
