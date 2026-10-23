@@ -90,7 +90,7 @@ def test_create_mcp_app_exposes_health_and_tools() -> None:
     http_app = server.build_http_app(app, token=None, rate_limit=60)
     response = request(http_app, path="/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "service": "rzd-api", "version": "3.0.0"}
+    assert response.json() == {"status": "ok", "service": "rzd-api", "version": "3.1.0"}
 
 
 class FakeRunApp:
