@@ -68,3 +68,46 @@ client.get_route_stations(object_id)
 cars = client.get_carriages(origin, destination, date, time, train)
 route = client.get_route_stations(origin, destination, date, time, train)
 ```
+
+## Migration from 3.0.0 to 3.1.0
+
+Публичный Python `search_tickets()` сохраняет прежние типы результата, а новые
+поля существующих dataclass добавлены после прежних позиционных аргументов.
+
+### TLS
+
+Проверка сертификата и имени сервера теперь включена. Если стандартное
+хранилище CA вашей среды не доверяет цепочке РЖД, задайте доверенный PEM bundle:
+
+```python
+from rzd_api import Config, RzdClient
+
+client = RzdClient(Config(ca_bundle="/absolute/path/ca-bundle.pem"))
+```
+
+Для Python и MCP также действует `RZD_CA_BUNDLE`. Явный `Config.ca_bundle`
+имеет приоритет над этой переменной и `REQUESTS_CA_BUNDLE`. В Docker файл
+нужно смонтировать и указать его путь внутри контейнера. Получение доверенного
+сертификата описано в [README.md](README.md#tls-и-доверенные-сертификаты).
+Автоматического перехода на соединение без проверки TLS нет.
+
+### MCP
+
+`raw` больше не включается в ответы tools по умолчанию. Если обработчик
+использовал исходные поля РЖД, передайте `include_raw=true`. Python-модели
+и их `to_dict()` продолжают сохранять полный `raw`.
+
+У `search_tickets` новый `include_metadata=true` возвращает метаданные
+направления и признак `partial`; без него сохраняется прежняя форма ответа.
+
+### Варианты маршрута и время
+
+`RouteStationsResult.stations` теперь содержит остановки первого варианта;
+все варианты с собственными остановками доступны в `routes`. Код, которому
+нужны все альтернативы, должен обходить `result.routes`, а не трактовать
+их объединение как последовательность остановок одного поезда.
+
+Старые `departure_time`/`arrival_time` у `TrainRoute` сохраняют поведение 3.0.
+Для явного выбора времени используйте `local_departure_time`,
+`local_arrival_time`, `moscow_departure_time`, `moscow_arrival_time`.
+Подробный поиск с полнотой выдачи доступен через `search_tickets_detailed()`.

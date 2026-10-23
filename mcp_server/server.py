@@ -231,7 +231,7 @@ def create_mcp_app(*, host: str = "127.0.0.1", port: int = 8000) -> Any:
 
     @app.custom_route("/health", methods=["GET"], include_in_schema=False)
     async def health(_: Request) -> JSONResponse:
-        return JSONResponse({"status": "ok", "service": "rzd-api", "version": "3.0.0"})
+        return JSONResponse({"status": "ok", "service": "rzd-api", "version": "3.1.0"})
 
     return app
 

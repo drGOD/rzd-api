@@ -171,7 +171,7 @@ station-not-found и ambiguous-station.
 docker run --rm -i \
   --mount type=bind,src=/absolute/path/ca-bundle.pem,dst=/run/rzd-ca.pem,readonly \
   -e RZD_CA_BUNDLE=/run/rzd-ca.pem \
-  -e MCP_TRANSPORT=stdio rzd-api:3.0.0
+  -e MCP_TRANSPORT=stdio rzd-api:3.1.0
 ```
 
 TLS/HTTP/transport errors остаются исключениями, а не пустым результатом поиска.
