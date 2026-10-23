@@ -30,17 +30,18 @@ classifiers = [
 ]
 dependencies = [
     "requests>=2.31,<3",
+    "tzdata>=2025.2; platform_system == 'Windows'",
     "urllib3>=2,<3",
 ]
 
 [project.optional-dependencies]
 mcp = [
-    "mcp>=1.28.1,<1.29",
+    "mcp>=1.30.0,<1.31",
     "uvicorn>=0.51,<0.52",
 ]
 dev = [
     "build>=1.3,<2",
-    "mcp>=1.28.1,<1.29",
+    "mcp>=1.30.0,<1.31",
     "mypy>=1.18,<2",
     "pip-audit>=2.9,<3",
     "pytest>=9,<10",
