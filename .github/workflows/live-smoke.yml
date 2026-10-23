@@ -10,8 +10,11 @@ permissions:
 
 jobs:
   smoke:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Scheduled provider checks require a deliberately configured network exit.
+    # A manual run is always available; skipped schedules do not prove live health.
+    if: github.event_name == 'workflow_dispatch' || vars.RZD_LIVE_ENABLED == 'true'
+    runs-on: ${{ vars.RZD_LIVE_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
@@ -19,7 +22,27 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: python -m pip install -e ".[dev]"
+      - name: Prepare verified provider CA bundle
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --connect-timeout 5 --max-time 30 \
+            --proto '=https' --tlsv1.2 \
+            https://gu-st.ru/content/Other/doc/russian_trusted_root_ca.cer \
+            -o "$RUNNER_TEMP/rzd-root.pem"
+          fingerprint="$(openssl x509 -in "$RUNNER_TEMP/rzd-root.pem" -noout -fingerprint -sha256)"
+          test "${fingerprint#*=}" = 'D2:6D:2D:02:31:B7:C3:9F:92:CC:73:85:12:BA:54:10:35:19:E4:40:5D:68:B5:BD:70:3E:97:88:CA:8E:CF:31'
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import certifi
+          root = Path(os.environ['RUNNER_TEMP'])
+          (root / 'rzd-ca-bundle.pem').write_bytes(
+              Path(certifi.where()).read_bytes() + b'\n' + (root / 'rzd-root.pem').read_bytes()
+          )
+          PY
       - name: Station and direct-route smoke
         env:
           RZD_LIVE_TEST: "1"
+          RZD_CA_BUNDLE: ${{ runner.temp }}/rzd-ca-bundle.pem
+          RZD_LIVE_PROXY: ${{ secrets.RZD_LIVE_PROXY }}
         run: python -m pytest tests/integration/test_live_api.py -m integration -v
