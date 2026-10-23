@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import certifi
 import pytest
 import requests
 
@@ -74,7 +75,7 @@ def test_transport_configures_session_and_request() -> None:
         "get", "https://example.test/path", params={"a": 1}, json_body={"b": 2}
     )
     assert result == {"ok": True}
-    assert session.verify is False
+    assert session.verify is True
     assert session.headers["User-Agent"] == "test-agent"
     assert session.proxies["https"] == "http://proxy.invalid"
     assert set(session.adapters) == {"http://", "https://"}
@@ -86,6 +87,32 @@ def test_transport_configures_session_and_request() -> None:
     assert retry.respect_retry_after_header is True
     assert retry.allowed_methods == frozenset({"GET", "POST"})
     assert retry.status_forcelist == (429, 500, 502, 503, 504)
+
+
+def test_transport_uses_custom_ca_bundle() -> None:
+    ca_bundle = certifi.where()
+    _, session = make_transport(FakeResponse({"ok": True}), ca_bundle=ca_bundle)
+    assert session.verify == ca_bundle
+
+
+def test_rzd_ca_bundle_environment_is_applied(monkeypatch: pytest.MonkeyPatch) -> None:
+    ca_bundle = certifi.where()
+    monkeypatch.setenv("RZD_CA_BUNDLE", ca_bundle)
+    _, session = make_transport(FakeResponse({"ok": True}))
+    assert session.verify == ca_bundle
+
+
+def test_invalid_ca_bundle_is_rejected() -> None:
+    with pytest.raises(ValueError, match="ca_bundle"):
+        Config(ca_bundle="missing-ca.pem")
+
+
+def test_ssl_error_becomes_transport_error_without_retrying_insecurely() -> None:
+    transport, session = make_transport(requests.exceptions.SSLError("certificate failed"))
+    with pytest.raises(RzdTransportError, match="certificate failed"):
+        transport.request_json("GET", "https://example.test")
+    assert len(session.calls) == 1
+    assert session.verify is True
 
 
 def test_transport_rejects_method_and_closed_client() -> None:

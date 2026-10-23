@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass(slots=True)
@@ -19,8 +21,11 @@ class Config:
     proxy: str | None = None
     user_agent: str | None = None
     referer: str | None = None
+    ca_bundle: str | None = None
 
     def __post_init__(self) -> None:
+        if self.ca_bundle is None:
+            self.ca_bundle = os.getenv("RZD_CA_BUNDLE") or None
         if not isinstance(self.language, str) or self.language not in {"ru", "en"}:
             raise ValueError("language must be either 'ru' or 'en'.")
         if not isinstance(self.base_url, str) or not self.base_url.startswith(
@@ -50,10 +55,15 @@ class Config:
             raise ValueError("station_cache_size must be an integer.")
         if self.station_cache_ttl < 0 or self.station_cache_size < 0:
             raise ValueError("station cache settings must not be negative.")
-        for name in ("proxy", "user_agent", "referer"):
+        for name in ("proxy", "user_agent", "referer", "ca_bundle"):
             value = getattr(self, name)
             if value is not None and not isinstance(value, str):
                 raise ValueError(f"{name} must be a string or None.")
+        if self.ca_bundle:
+            ca_bundle_path = Path(self.ca_bundle).expanduser()
+            if not ca_bundle_path.is_file():
+                raise ValueError("ca_bundle must point to a readable CA bundle file.")
+            self.ca_bundle = str(ca_bundle_path)
 
     @staticmethod
     def _is_number(value: object) -> bool:

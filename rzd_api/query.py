@@ -5,14 +5,11 @@ import time
 from typing import Any
 
 import requests
-import urllib3
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from .config import Config
 from .exceptions import RzdAPIError, RzdHTTPError, RzdTransportError
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +25,7 @@ class RzdTransport:
         self._owns_session = session is None
         self._closed = False
 
-        # Kept unchanged for 2.0 by explicit project decision.
-        self.session.verify = False
+        self.session.verify = config.ca_bundle or True
         self.session.headers.update(
             {
                 "Accept": "application/json, text/plain, */*",
