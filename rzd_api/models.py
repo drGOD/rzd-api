@@ -22,6 +22,11 @@ class Station(ModelMixin):
     node_type: str | None = None
     transport_type: str | None = None
     region: str | None = None
+    city_id: str | None = None
+    timezone: str | None = None
+    codes: JsonObject = field(default_factory=dict)
+    station_codes: list[str] = field(default_factory=list)
+    country: str | None = None
 
 
 @dataclass(slots=True)
@@ -48,6 +53,28 @@ class TrainRoute(ModelMixin):
     origin_code: str | None = None
     destination_code: str | None = None
     provider: str | None = None
+    local_departure_time: str | None = None
+    local_arrival_time: str | None = None
+    moscow_departure_time: str | None = None
+    moscow_arrival_time: str | None = None
+
+
+@dataclass(slots=True)
+class TrainSearchResult(ModelMixin):
+    trains: list[TrainRoute] = field(default_factory=list)
+    origin_code: str | None = None
+    destination_code: str | None = None
+    origin_name: str | None = None
+    destination_name: str | None = None
+    moscow_time: str | None = None
+    partial: bool | None = None
+    raw: JsonObject = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class RoundTripSearchResult(ModelMixin):
+    forward: TrainSearchResult
+    back: TrainSearchResult
 
 
 @dataclass(slots=True)
@@ -184,6 +211,16 @@ class RouteStation(ModelMixin):
 
 
 @dataclass(slots=True)
+class RouteVariant(ModelMixin):
+    train_number: str | None
+    stations: list[RouteStation] = field(default_factory=list)
+    raw: JsonObject = field(default_factory=dict)
+    route_name: str | None = None
+    origin_name: str | None = None
+    destination_name: str | None = None
+
+
+@dataclass(slots=True)
 class RouteStationsResult(ModelMixin):
     train_number: str | None
     stations: list[RouteStation] = field(default_factory=list)
@@ -191,3 +228,4 @@ class RouteStationsResult(ModelMixin):
     route_name: str | None = None
     origin_name: str | None = None
     destination_name: str | None = None
+    routes: list[RouteVariant] = field(default_factory=list)

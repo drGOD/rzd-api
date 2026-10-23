@@ -95,6 +95,26 @@ def test_transport_uses_custom_ca_bundle() -> None:
     assert session.verify == ca_bundle
 
 
+def test_explicit_bundle_takes_precedence_over_requests_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("REQUESTS_CA_BUNDLE", "/unrelated/missing-ca.pem")
+    captured: dict[str, Any] = {}
+    session = requests.Session()
+
+    def send(request: Any, **kwargs: Any) -> requests.Response:
+        captured.update(kwargs)
+        response = requests.Response()
+        response.status_code = 200
+        response._content = b"{}"
+        return response
+
+    monkeypatch.setattr(session, "send", send)
+    transport = RzdTransport(Config(ca_bundle=certifi.where()), session=session)
+    assert transport.request_json("GET", "https://example.test") == {}
+    assert captured["verify"] == certifi.where()
+
+
 def test_rzd_ca_bundle_environment_is_applied(monkeypatch: pytest.MonkeyPatch) -> None:
     ca_bundle = certifi.where()
     monkeypatch.setenv("RZD_CA_BUNDLE", ca_bundle)
@@ -179,3 +199,17 @@ def test_api_error_shapes() -> None:
         assert transport.request_json("GET", "https://example.test") == {
             "errorInfo": {"Code": code}
         }
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"Code": "i1", "Message": "provider failed"},
+        {"code": "INTERNAL_ERROR", "Message": "provider failed"},
+        {"error": "provider failed"},
+    ],
+)
+def test_successful_http_status_does_not_hide_provider_errors(payload: dict[str, Any]) -> None:
+    transport, _ = make_transport(FakeResponse(payload))
+    with pytest.raises(RzdAPIError, match="provider failed"):
+        transport.request_json("GET", "https://example.test")

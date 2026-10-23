@@ -81,6 +81,7 @@ class RzdTransport:
                 params=params,
                 json=json_body,
                 timeout=(self.config.connect_timeout, self.config.read_timeout),
+                verify=self.config.ca_bundle or True,
             )
         except requests.RequestException as exc:
             raise RzdTransportError(f"RZD request failed: {exc}") from exc
@@ -121,6 +122,13 @@ class RzdTransport:
         message = payload.get("message")
         if isinstance(message, str) and message:
             raise RzdAPIError(message=message)
+
+        code = payload.get("Code", payload.get("code"))
+        if code is not None and str(code) not in {"", "0"}:
+            raise RzdAPIError(code, str(payload.get("Message") or "RZD API returned an error."))
+        error = payload.get("error")
+        if error:
+            raise RzdAPIError(message=str(error))
 
     def close(self) -> None:
         if self._closed:

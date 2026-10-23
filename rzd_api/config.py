@@ -22,6 +22,7 @@ class Config:
     user_agent: str | None = None
     referer: str | None = None
     ca_bundle: str | None = None
+    station_search_url: str | None = None
 
     def __post_init__(self) -> None:
         if self.ca_bundle is None:
@@ -37,6 +38,11 @@ class Config:
             or not self.b2b_base_url.startswith(("http://", "https://"))
         ):
             raise ValueError("b2b_base_url must be an absolute HTTP(S) URL or None.")
+        if self.station_search_url is not None and (
+            not isinstance(self.station_search_url, str)
+            or not self.station_search_url.startswith(("http://", "https://"))
+        ):
+            raise ValueError("station_search_url must be an absolute HTTP(S) URL or None.")
         if not self._is_number(self.connect_timeout) or not self._is_number(self.read_timeout):
             raise ValueError("connect_timeout and read_timeout must be numbers.")
         if self.connect_timeout <= 0 or self.read_timeout <= 0:
@@ -59,9 +65,9 @@ class Config:
             value = getattr(self, name)
             if value is not None and not isinstance(value, str):
                 raise ValueError(f"{name} must be a string or None.")
-        if self.ca_bundle:
+        if self.ca_bundle is not None:
             ca_bundle_path = Path(self.ca_bundle).expanduser()
-            if not ca_bundle_path.is_file():
+            if not ca_bundle_path.is_file() or not os.access(ca_bundle_path, os.R_OK):
                 raise ValueError("ca_bundle must point to a readable CA bundle file.")
             self.ca_bundle = str(ca_bundle_path)
 

@@ -20,12 +20,15 @@ from .models import (
     MinimalPrice,
     MinimalPricingResult,
     RoundTripResult,
+    RoundTripSearchResult,
     RouteStation,
     RouteStationsResult,
+    RouteVariant,
     Station,
     TrainAvailability,
     TrainAvailabilityResult,
     TrainRoute,
+    TrainSearchResult,
 )
 
 __all__ = [
@@ -39,8 +42,10 @@ __all__ = [
     "MinimalPrice",
     "MinimalPricingResult",
     "RoundTripResult",
+    "RoundTripSearchResult",
     "RouteStation",
     "RouteStationsResult",
+    "RouteVariant",
     "RzdAPIError",
     "RzdAmbiguousStationError",
     "RzdClient",
@@ -54,4 +59,5 @@ __all__ = [
     "TrainAvailability",
     "TrainAvailabilityResult",
     "TrainRoute",
+    "TrainSearchResult",
 ]
