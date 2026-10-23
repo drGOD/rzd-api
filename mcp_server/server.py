@@ -12,7 +12,9 @@ from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from rzd_api import RoundTripResult, RzdClient
+from rzd_api import RzdClient
+
+from .serialization import serialize
 
 
 def search_tickets(
@@ -25,10 +27,13 @@ def search_tickets(
     only_with_seats: bool = True,
     include_transfers: bool = False,
     transport_type: str = "all",
+    include_raw: bool = False,
+    include_metadata: bool = False,
 ) -> dict[str, Any] | list[dict[str, Any]]:
-    """Search direct RZD routes by station name/code and departure date."""
+    """Search trains. include_metadata adds completeness and server time; raw is opt-in."""
     with RzdClient() as client:
-        result = client.search_tickets(
+        search = client.search_tickets_detailed if include_metadata else client.search_tickets
+        result = search(
             from_station,
             to_station,
             departure_date,
@@ -39,26 +44,25 @@ def search_tickets(
             include_transfers=include_transfers,
             transport_type=transport_type,
         )
-        if isinstance(result, RoundTripResult):
-            return result.to_dict()
-        return [route.to_dict() for route in result]
+        return serialize(result, include_raw=include_raw)
 
 
 def find_stations(
     query: str,
     transport_type: str = "rail,suburban",
     group_results: bool = True,
+    include_raw: bool = False,
 ) -> list[dict[str, Any]]:
     """Find station candidates, including synonym matches."""
     with RzdClient() as client:
-        return [
-            station.to_dict()
-            for station in client.find_stations(
+        return serialize(
+            client.find_stations(
                 query,
                 transport_type=transport_type,
                 group_results=group_results,
-            )
-        ]
+            ),
+            include_raw=include_raw,
+        )
 
 
 def get_carriages(
@@ -68,17 +72,21 @@ def get_carriages(
     departure_time: str,
     train_number: str,
     provider: str = "P1",
+    include_raw: bool = False,
 ) -> dict[str, Any]:
     """Get typed carriage and seat availability details for a train."""
     with RzdClient() as client:
-        return client.get_carriages(
-            from_station,
-            to_station,
-            departure_date,
-            departure_time,
-            train_number,
-            provider=provider,
-        ).to_dict()
+        return serialize(
+            client.get_carriages(
+                from_station,
+                to_station,
+                departure_date,
+                departure_time,
+                train_number,
+                provider=provider,
+            ),
+            include_raw=include_raw,
+        )
 
 
 def get_train_availability(
@@ -86,20 +94,27 @@ def get_train_availability(
     to_station: str,
     date_from: str,
     date_to: str,
+    include_raw: bool = False,
 ) -> dict[str, Any]:
     """Get dates with available trains for a direction."""
     with RzdClient() as client:
-        return client.get_train_availability(from_station, to_station, date_from, date_to).to_dict()
+        return serialize(
+            client.get_train_availability(from_station, to_station, date_from, date_to),
+            include_raw=include_raw,
+        )
 
 
 def get_minimal_prices(
     from_station: str,
     to_station: str,
     date_from: str,
+    include_raw: bool = False,
 ) -> dict[str, Any]:
     """Get the minimum published prices from a selected date."""
     with RzdClient() as client:
-        return client.get_minimal_prices(from_station, to_station, date_from).to_dict()
+        return serialize(
+            client.get_minimal_prices(from_station, to_station, date_from), include_raw=include_raw
+        )
 
 
 def get_car_scheme(
@@ -111,19 +126,23 @@ def get_car_scheme(
     service_class: str,
     carrier: str,
     car_numeration: str = "FromHead",
+    include_raw: bool = False,
 ) -> dict[str, Any]:
     """Get carriage scheme metadata."""
     with RzdClient() as client:
-        return client.get_car_scheme(
-            departure_date,
-            departure_time,
-            train_number,
-            car_number,
-            car_sub_type,
-            service_class,
-            carrier,
-            car_numeration=car_numeration,
-        ).to_dict()
+        return serialize(
+            client.get_car_scheme(
+                departure_date,
+                departure_time,
+                train_number,
+                car_number,
+                car_sub_type,
+                service_class,
+                carrier,
+                car_numeration=car_numeration,
+            ),
+            include_raw=include_raw,
+        )
 
 
 def get_car_images(
@@ -135,19 +154,23 @@ def get_car_images(
     service_class: str,
     carrier: str,
     car_numeration: str = "FromHead",
+    include_raw: bool = False,
 ) -> dict[str, Any]:
     """Get carriage image metadata."""
     with RzdClient() as client:
-        return client.get_car_images(
-            departure_date,
-            departure_time,
-            train_number,
-            car_number,
-            car_sub_type,
-            service_class,
-            carrier,
-            car_numeration=car_numeration,
-        ).to_dict()
+        return serialize(
+            client.get_car_images(
+                departure_date,
+                departure_time,
+                train_number,
+                car_number,
+                car_sub_type,
+                service_class,
+                carrier,
+                car_numeration=car_numeration,
+            ),
+            include_raw=include_raw,
+        )
 
 
 def get_route_stations(
@@ -157,17 +180,21 @@ def get_route_stations(
     departure_time: str,
     train_number: str,
     provider: str = "P1",
+    include_raw: bool = False,
 ) -> dict[str, Any]:
     """Get all stations for a train and direction."""
     with RzdClient() as client:
-        return client.get_route_stations(
-            from_station,
-            to_station,
-            departure_date,
-            departure_time,
-            train_number,
-            provider=provider,
-        ).to_dict()
+        return serialize(
+            client.get_route_stations(
+                from_station,
+                to_station,
+                departure_date,
+                departure_time,
+                train_number,
+                provider=provider,
+            ),
+            include_raw=include_raw,
+        )
 
 
 def create_mcp_app(*, host: str = "127.0.0.1", port: int = 8000) -> Any:
