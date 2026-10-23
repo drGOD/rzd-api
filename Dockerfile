@@ -12,7 +12,7 @@ WORKDIR /app
 RUN groupadd --gid 10001 rzd \
     && useradd --uid 10001 --gid rzd --no-create-home --shell /usr/sbin/nologin rzd
 
-COPY pyproject.toml README.md LICENSE constraints.txt ./
+COPY pyproject.toml README.md LICENSE CREDITS.md constraints.txt ./
 COPY rzd_api/ rzd_api/
 COPY mcp_server/ mcp_server/
 
