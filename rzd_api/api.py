@@ -18,10 +18,12 @@ from .models import (
     MinimalPricingResult,
     RouteStation,
     RouteStationsResult,
+    RouteVariant,
     Station,
     TrainAvailability,
     TrainAvailabilityResult,
     TrainRoute,
+    TrainSearchResult,
 )
 from .query import JsonPayload, RzdTransport
 
@@ -46,6 +48,23 @@ class RzdApi:
         adults: int,
         children: int,
     ) -> list[TrainRoute]:
+        return self.get_train_search_result(
+            origin=origin,
+            destination=destination,
+            departure_date=departure_date,
+            adults=adults,
+            children=children,
+        ).trains
+
+    def get_train_search_result(
+        self,
+        *,
+        origin: str,
+        destination: str,
+        departure_date: str,
+        adults: int,
+        children: int,
+    ) -> TrainSearchResult:
         payload = self.transport.request_json(
             "GET",
             f"{self.base_url}/railway-service/prices/train-pricing",
@@ -65,7 +84,19 @@ class RzdApi:
             },
         )
         nodes = self._train_nodes(payload)
-        return [self._parse_train(node) for node in nodes]
+        root = payload if isinstance(payload, dict) else {}
+        if isinstance(root.get("data"), dict):
+            root = root["data"]
+        return TrainSearchResult(
+            trains=[self._parse_train(node) for node in nodes],
+            origin_code=self._string(root, "OriginCode", "OriginStationCode"),
+            destination_code=self._string(root, "DestinationCode", "DestinationStationCode"),
+            origin_name=self._string(root, "OriginStationName"),
+            destination_name=self._string(root, "DestinationStationName"),
+            moscow_time=self._string(root, "MoscowDateTime"),
+            partial=self._boolean(root, "NotAllTrainsReturned"),
+            raw=root,
+        )
 
     def get_train_availability(
         self,
@@ -117,6 +148,11 @@ class RzdApi:
             },
         )
         root = self._object_payload(payload, "train-minimal-pricing")
+        if all(
+            key in root and root[key] is None
+            for key in ("OriginStationCode", "DestinationStationCode", "PriceByDepartureDates")
+        ):
+            return MinimalPricingResult(origin, destination, raw=root)
         price_nodes = self._object_list(root, "PriceByDepartureDates", "train-minimal-pricing")
         prices: list[MinimalPrice] = []
         for node in price_nodes:
@@ -157,7 +193,7 @@ class RzdApi:
     ) -> list[Station]:
         payload = self.transport.request_json(
             "GET",
-            f"{self.base_url}/suggests",
+            self.config.station_search_url or f"{self.base_url}/suggests",
             params={
                 "Query": query,
                 "TransportType": transport_type,
@@ -173,9 +209,17 @@ class RzdApi:
                 "The station suggestion response contains unsupported station nodes."
             )
         stations = list(self._parse_station_nodes(nodes))
-        unique: dict[tuple[str, str], Station] = {}
+        unique: dict[tuple[str, str, str | None, str | None, str], Station] = {}
         for station in stations:
-            unique[(station.name, station.code)] = station
+            unique[
+                (
+                    station.name,
+                    station.code,
+                    station.node_id,
+                    station.city_id,
+                    str(station.codes.get("Cbdpr") or ""),
+                )
+            ] = station
         return list(unique.values())
 
     def get_carriages(
@@ -314,18 +358,30 @@ class RzdApi:
         route_nodes = self._object_list(root, "Routes", "route stations")
         if not route_nodes:
             raise RzdSchemaError("The route-stations response contains no routes.")
-        station_nodes: list[JsonObject] = []
-        for route in route_nodes:
-            station_nodes.extend(self._object_list(route, "RouteStops", "route stations"))
-        first_route = route_nodes[0]
+        routes = [
+            RouteVariant(
+                train_number=self._string(route, "TrainNumber") or train_number,
+                stations=[
+                    self._parse_route_station(node)
+                    for node in self._object_list(route, "RouteStops", "route stations")
+                ],
+                raw=route,
+                route_name=self._string(route, "Name"),
+                origin_name=self._string(route, "OriginName"),
+                destination_name=self._string(route, "DestinationName"),
+            )
+            for route in route_nodes
+        ]
+        first_route = routes[0]
 
         return RouteStationsResult(
-            train_number=self._string(first_route, "TrainNumber") or train_number,
-            stations=[self._parse_route_station(node) for node in station_nodes],
+            train_number=first_route.train_number,
+            stations=list(first_route.stations),
             raw=root,
-            route_name=self._string(first_route, "Name"),
-            origin_name=self._string(first_route, "OriginName"),
-            destination_name=self._string(first_route, "DestinationName"),
+            route_name=first_route.route_name,
+            origin_name=first_route.origin_name,
+            destination_name=first_route.destination_name,
+            routes=routes,
         )
 
     @staticmethod
@@ -394,6 +450,12 @@ class RzdApi:
             origin_code=cls._string(node, "OriginStationCode", "originStationCode"),
             destination_code=cls._string(node, "DestinationStationCode", "destinationStationCode"),
             provider=cls._string(node, "Provider", "provider"),
+            local_departure_time=cls._string(
+                node, "LocalDepartureDateTime", "localDepartureDateTime"
+            ),
+            local_arrival_time=cls._string(node, "LocalArrivalDateTime", "localArrivalDateTime"),
+            moscow_departure_time=cls._string(node, "DepartureDateTime", "departureDateTime"),
+            moscow_arrival_time=cls._string(node, "ArrivalDateTime", "arrivalDateTime"),
         )
 
     @classmethod
@@ -467,6 +529,10 @@ class RzdApi:
 
     @classmethod
     def _parse_route_station(cls, node: JsonObject) -> RouteStation:
+        if not cls._string(node, "StationName", "stationName", "Name", "name") and not cls._string(
+            node, "StationCode", "stationCode", "Code", "code"
+        ):
+            raise RzdSchemaError("A route stop has neither a station name nor a station code.")
         return RouteStation(
             name=cls._string(node, "StationName", "stationName", "Name", "name"),
             code=cls._string(node, "StationCode", "stationCode", "Code", "code"),
@@ -489,7 +555,7 @@ class RzdApi:
             time_description=cls._string(node, "TimeDescription"),
             days_from_origin=cls._integer(node, "DaysFromFormingStation"),
             time_zone_difference=cls._integer(node, "TimeZoneDifference"),
-            actual_movement=cls._boolean(node, "ActualMovement"),
+            actual_movement=cls._actual_movement(node.get("ActualMovement")),
             is_cutaway_station=cls._boolean(node, "IsCutawayStation"),
         )
 
@@ -497,10 +563,12 @@ class RzdApi:
     def _suggestion_nodes(cls, payload: JsonPayload) -> list[Any]:
         if isinstance(payload, list):
             return payload
-        for key in ("suggestions", "items", "data"):
+        for key in ("transport_node_suggests", "suggestions", "items", "data"):
             value = payload.get(key)
             if isinstance(value, list):
                 return value
+            if key in payload:
+                raise RzdSchemaError(f"The station suggestion '{key}' field must be a list.")
         category_keys = ("city", "train", "suburban", "bus")
         if any(key in payload for key in category_keys):
             nodes: list[Any] = []
@@ -521,7 +589,8 @@ class RzdApi:
         for node in nodes:
             if not isinstance(node, dict):
                 continue
-            code = cls._string(node, "ExpressCode", "expressCode", "code", "Code", "c")
+            codes = cls._station_codes(node)
+            code = cls._station_railway_code(node, codes)
             name = cls._string(node, "NameRu", "nameRu", "name", "Name", "n", "title")
             if code and name:
                 yield Station(
@@ -529,10 +598,18 @@ class RzdApi:
                     code=code,
                     raw=node,
                     node_id=cls._string(node, "nodeId", "NodeId", "id", "Id"),
-                    node_type=cls._string(node, "nodeType", "NodeType"),
+                    node_type=cls._string(node, "nodeType", "NodeType", "SubType"),
                     transport_type=cls._string(node, "transportType", "TransportType"),
-                    region=cls._string(node, "region", "Region"),
+                    region=cls._string(node, "region", "Region", "Description"),
+                    city_id=cls._string(node, "CityId", "cityId"),
+                    timezone=cls._string(node, "Timezone", "timezone"),
+                    codes=codes,
+                    station_codes=cls._child_station_codes(node),
+                    country=cls._string(node, "CountryISO", "country", "Country"),
                 )
+                continue
+            if "Codes" in node or "codes" in node:
+                # A valid non-railway suggestion must not become a railway station code.
                 continue
             for key in ("stations", "items", "children", "Children"):
                 nested = node.get(key)
@@ -544,9 +621,11 @@ class RzdApi:
         for node in nodes:
             if not isinstance(node, dict):
                 return False
-            code = cls._string(node, "ExpressCode", "expressCode", "code", "Code", "c")
+            codes = cls._station_codes(node)
+            code = cls._station_railway_code(node, codes)
             name = cls._string(node, "NameRu", "nameRu", "name", "Name", "n", "title")
-            if code and name:
+            if name and (code or "Codes" in node or "codes" in node):
+                cls._child_station_codes(node)
                 continue
 
             nested_values = [
@@ -558,6 +637,53 @@ class RzdApi:
                 if not isinstance(nested, list) or not cls._station_nodes_match_schema(nested):
                     return False
         return True
+
+    @staticmethod
+    def _station_railway_code(node: JsonObject, codes: JsonObject) -> str | None:
+        for key in ("ExpressCode", "expressCode", "code", "Code", "c"):
+            value = node.get(key)
+            if value is None or value == "":
+                continue
+            if isinstance(value, bool) or not isinstance(value, (str, int)):
+                raise RzdSchemaError(f"Station {key} must be a string or integer.")
+            return str(value)
+        value = codes.get("Railway")
+        return str(value) if value is not None and value != "" else None
+
+    @staticmethod
+    def _station_codes(node: JsonObject) -> JsonObject:
+        value = node.get("Codes", node.get("codes", {}))
+        if not isinstance(value, dict):
+            raise RzdSchemaError("Station Codes must be an object.")
+        for key in ("Railway", "Cbdpr"):
+            code = value.get(key)
+            if code is not None and (isinstance(code, bool) or not isinstance(code, (str, int))):
+                raise RzdSchemaError(f"Station Codes.{key} must be a string or integer.")
+        return dict(value)
+
+    @classmethod
+    def _child_station_codes(cls, node: JsonObject) -> list[str]:
+        if "Stations" not in node:
+            return []
+        children = cls._object_list(node, "Stations", "station suggestion")
+        return list(
+            dict.fromkeys(
+                code
+                for child in children
+                if (code := cls._string(cls._station_codes(child), "Railway"))
+            )
+        )
+
+    @staticmethod
+    def _actual_movement(value: Any) -> bool | None:
+        # Adapted from OvaleZ/rzd-api e117722; tolerate only this optional field.
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int) and value in (0, 1):
+            return bool(value)
+        if isinstance(value, str) and value.strip().lower() in {"true", "false"}:
+            return value.strip().lower() == "true"
+        return None
 
     @staticmethod
     def _car_nodes(root: JsonObject) -> list[JsonObject]:

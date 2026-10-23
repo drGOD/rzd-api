@@ -21,6 +21,7 @@ from rzd_api import (
     Station,
     TrainAvailabilityResult,
     TrainRoute,
+    TrainSearchResult,
 )
 
 
@@ -61,6 +62,9 @@ class FakeApi:
     def get_train_routes(self, **kwargs: Any) -> list[TrainRoute]:
         self.calls.append(("get_train_routes", kwargs))
         return list(self.routes)
+
+    def get_train_search_result(self, **kwargs: Any) -> TrainSearchResult:
+        return TrainSearchResult(trains=self.get_train_routes(**kwargs))
 
     def find_stations(self, **kwargs: Any) -> list[Station]:
         self.calls.append(("find_stations", kwargs))

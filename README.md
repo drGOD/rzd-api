@@ -4,8 +4,8 @@
 [`ticket.rzd.ru`](https://ticket.rzd.ru). Проект не связан с ОАО «РЖД»; внутренние
 endpoint и схема ответов могут изменяться без предупреждения.
 
-Поведение TLS намеренно сохранено от версии 1.x: проверка сертификата API РЖД
-отключена. Не передавайте клиенту собственные секреты или учётные данные.
+Проверка TLS-сертификата и имени сервера включена. Для своей доверенной цепочки
+используйте `Config(ca_bundle="/path/to/ca-bundle.pem")` или `RZD_CA_BUNDLE`.
 
 ## Возможности
 
@@ -58,13 +58,15 @@ with RzdClient() as client:
             print(train.number, train.departure_time, train.min_price)
 ```
 
-Все модели поддерживают `to_dict()` и содержат необработанный узел ответа в `raw`.
+Все модели поддерживают `to_dict()`. Исходные узлы ответов сохраняются в `raw`;
+у составного `RoundTripSearchResult` они находятся в `forward.raw` и `back.raw`.
 
 ### Методы `RzdClient`
 
 | Метод | Результат |
 |---|---|
 | `search_tickets(...)` | `list[TrainRoute]` или `RoundTripResult` |
+| `search_tickets_detailed(...)` | `TrainSearchResult` или `RoundTripSearchResult` |
 | `find_stations(query, ...)` | `list[Station]` |
 | `resolve_station_code(station)` | код станции |
 | `get_carriages(...)` | `CarriageResult` |
@@ -102,6 +104,31 @@ pricing endpoint не поддерживает маршруты с переса�
 поэтому `include_transfers=True` и `transport_type="trains"|"suburban"` явно
 возвращают `NotImplementedError`.
 
+`search_tickets_detailed()` принимает те же параметры, но сохраняет метаданные
+направления: `trains`, `partial` (`NotAllTrainsReturned`), `moscow_time` и `raw`.
+`partial=None` означает, что источник не сообщил о полноте. Для туда-обратно
+`forward` и `back` содержат отдельные `TrainSearchResult`. Фильтрация мест не
+меняет исходный `raw` и не превращает неполный ответ в полный.
+
+У `TrainRoute` явно разделены `local_departure_time`/`local_arrival_time` и
+`moscow_departure_time`/`moscow_arrival_time`. Старые `departure_time` и
+`arrival_time` сохраняют приоритет московского времени из версии 3.0;
+для показа местного времени используйте новые поля.
+
+`get_route_stations()` возвращает все варианты в `routes: list[RouteVariant]`.
+Старые `stations`, `train_number` и названия относятся к **первому** варианту:
+остановки разных маршрутов больше не склеиваются. Необязательный
+`actual_movement` допускает boolean, 0/1 и строки `true`/`false`; неизвестное
+значение становится `None` и сохраняется в `raw`. Остальные ошибки схемы
+продолжают вызывать `RzdSchemaError`.
+
+Поиск станций поддерживает категории `city`/`train`, а также ISDK-формат
+`transport_node_suggests` с `Codes.Railway`, `CityId`, `Timezone` и `Stations`.
+Узлы разных вокзалов с одинаковым кодом сохраняются отдельно. Узлы без
+железнодорожного кода не подставляются в поиск поездов. По умолчанию используется
+прежний `/api/v1/suggests`; для ISDK задайте
+`Config(station_search_url="https://ticket.rzd.ru/isdk/suggests")`.
+
 ### Конфигурация
 
 ```python
@@ -118,6 +145,8 @@ config = Config(
     station_cache_ttl=3600,
     station_cache_size=256,
     proxy=None,
+    ca_bundle=None,  # Или RZD_CA_BUNDLE; проверка TLS всегда включена.
+    station_search_url=None,
 )
 client = RzdClient(config)
 ```
@@ -125,11 +154,41 @@ client = RzdClient(config)
 Ошибки наследуются от `RzdError`: validation, transport, HTTP, API, schema,
 station-not-found и ambiguous-station.
 
+### TLS и доверенные сертификаты
+
+При `CERTIFICATE_VERIFY_FAILED` настройте доверенную цепочку для своей среды.
+Корневой сертификат российского НУЦ следует получать с
+[официальной страницы Госуслуг](https://www.gosuslugi.ru/crt), проверяя источник
+и отпечаток. Библиотека не скачивает сертификаты и не меняет системное хранилище.
+`ca_bundle` — путь к PEM bundle с необходимыми доверенными CA; явно заданный
+путь имеет приоритет над `RZD_CA_BUNDLE` и `REQUESTS_CA_BUNDLE`.
+Без него используются стандартные настройки доверия Requests.
+
+Для MCP переменная `RZD_CA_BUNDLE` действует на все tools. В Docker смонтируйте
+файл только для чтения и передайте путь **внутри контейнера**:
+
+```sh
+docker run --rm -i \
+  --mount type=bind,src=/absolute/path/ca-bundle.pem,dst=/run/rzd-ca.pem,readonly \
+  -e RZD_CA_BUNDLE=/run/rzd-ca.pem \
+  -e MCP_TRANSPORT=stdio rzd-api:3.0.0
+```
+
+TLS/HTTP/transport errors остаются исключениями, а не пустым результатом поиска.
+
 ## MCP
 
 Инструменты: `search_tickets`, `find_stations`, `get_carriages`,
 `get_train_availability`, `get_minimal_prices`, `get_car_scheme`,
 `get_car_images`, `get_route_stations`.
+
+Все tools по умолчанию исключают `raw` на всех уровнях ответа. Передайте
+`include_raw=true`, если нужны исходные поля РЖД. Python-модели и их `to_dict()`
+сохраняют полный `raw`. Списки не обрезаются молча.
+
+У `search_tickets` флаг `include_metadata=true` возвращает подробный результат
+с `partial` и серверным временем; без него сохраняется прежняя форма списка
+или пары направлений. Для оценки полноты выдачи используйте этот флаг.
 
 Локальный stdio:
 
@@ -179,9 +238,21 @@ Live smoke test является opt-in:
 RZD_LIVE_TEST=1 pytest tests/integration -m integration -v
 ```
 
+Для живого API нужен сетевой выход с доступом к РЖД и настроенный CA bundle.
+Live-тесты не повторяют запросы автоматически. `RZD_LIVE_PROXY` задаёт proxy
+только для этих тестов. Еженедельный GitHub live smoke включается переменной
+репозитория `RZD_LIVE_ENABLED=true` после настройки доступа; без неё расписание
+пропускается. `RZD_LIVE_RUNNER` позволяет выбрать подходящий runner, секрет
+`RZD_LIVE_PROXY` — proxy. Ручной запуск доступен независимо от расписания.
+Workflow получает CA с официального HTTPS-источника и проверяет закреплённый
+SHA-256 отпечаток; при ротации сертификата проверка завершится ошибкой.
+Offline CI запускается независимо от наличия сетевого доступа к РЖД.
+
 Переход с 1.x описан в [MIGRATION.md](MIGRATION.md), изменения релизов — в
 [CHANGELOG.md](CHANGELOG.md).
 
 ## Лицензия
 
 MIT
+
+Происхождение заимствований и благодарности авторам — в [CREDITS.md](CREDITS.md).

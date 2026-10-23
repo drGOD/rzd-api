@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
-from rzd_api import RzdClient
+from rzd_api import Config, RzdClient
 
 pytestmark = [
     pytest.mark.integration,
@@ -16,9 +16,19 @@ pytestmark = [
 ]
 
 
+def live_config(**kwargs: str) -> Config:
+    return Config(
+        connect_timeout=5,
+        read_timeout=20,
+        retry_total=0,
+        proxy=os.getenv("RZD_LIVE_PROXY") or None,
+        **kwargs,
+    )
+
+
 def test_live_station_and_direct_route_search() -> None:
     departure = date.today() + timedelta(days=14)
-    with RzdClient() as client:
+    with RzdClient(live_config()) as client:
         stations = client.find_stations("Москва")
         assert stations
         routes = client.search_tickets(
@@ -33,7 +43,7 @@ def test_live_station_and_direct_route_search() -> None:
 def test_live_current_calendar_carriage_and_route_contracts() -> None:
     start = date.today() + timedelta(days=3)
     end = start + timedelta(days=30)
-    with RzdClient() as client:
+    with RzdClient(live_config()) as client:
         availability = client.get_train_availability("2000000", "2004000", start, end)
         assert availability.origin_code == "2000000"
         assert availability.items
@@ -70,3 +80,13 @@ def test_live_current_calendar_carriage_and_route_contracts() -> None:
             provider=route.provider or "P1",
         )
         assert train_route.stations
+        assert train_route.routes
+        assert train_route.stations == train_route.routes[0].stations
+
+
+def test_live_isdk_station_contract() -> None:
+    with RzdClient(live_config(station_search_url="https://ticket.rzd.ru/isdk/suggests")) as client:
+        stations = client.find_stations("Чебоксары")
+        assert stations
+        assert all(station.code and station.node_id for station in stations)
+        assert any(station.timezone for station in stations)

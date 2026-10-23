@@ -20,10 +20,12 @@ from .models import (
     CarScheme,
     MinimalPricingResult,
     RoundTripResult,
+    RoundTripSearchResult,
     RouteStationsResult,
     Station,
     TrainAvailabilityResult,
     TrainRoute,
+    TrainSearchResult,
 )
 
 MOSCOW_TIMEZONE = ZoneInfo("Europe/Moscow")
@@ -54,6 +56,42 @@ class RzdClient:
         transport_type: str = "all",
     ) -> list[TrainRoute] | RoundTripResult:
         """Search direct railway routes by station names or codes."""
+        result = self.search_tickets_detailed(
+            from_station,
+            to_station,
+            departure_date,
+            return_date,
+            adults=adults,
+            children=children,
+            only_with_seats=only_with_seats,
+            include_transfers=include_transfers,
+            transport_type=transport_type,
+        )
+        if isinstance(result, TrainSearchResult):
+            return result.trains
+        return RoundTripResult(
+            forward=result.forward.trains,
+            back=result.back.trains,
+            raw={
+                "forward": [route.raw for route in result.forward.trains],
+                "back": [route.raw for route in result.back.trains],
+            },
+        )
+
+    def search_tickets_detailed(
+        self,
+        from_station: str | int,
+        to_station: str | int,
+        departure_date: str | date | datetime,
+        return_date: str | date | datetime | None = None,
+        *,
+        adults: int = 1,
+        children: int = 0,
+        only_with_seats: bool = True,
+        include_transfers: bool = False,
+        transport_type: str = "all",
+    ) -> TrainSearchResult | RoundTripSearchResult:
+        """Search with direction metadata, server time and upstream completeness."""
         self._ensure_open()
         if include_transfers:
             raise NotImplementedError(
@@ -79,33 +117,29 @@ class RzdClient:
         destination = self.resolve_station_code(to_station)
         if origin == destination:
             raise RzdValidationError("Origin and destination stations must be different.")
-        forward = self._api.get_train_routes(
+        forward = self._api.get_train_search_result(
             origin=origin,
             destination=destination,
             departure_date=self._format_datetime(departure),
             adults=adults,
             children=children,
         )
-        forward = self._filter_routes(forward, only_with_seats)
+        forward.trains = self._filter_routes(forward.trains, only_with_seats)
 
         if return_value is None:
             return forward
 
-        back = self._api.get_train_routes(
+        back = self._api.get_train_search_result(
             origin=destination,
             destination=origin,
             departure_date=self._format_datetime(return_value),
             adults=adults,
             children=children,
         )
-        filtered_back = self._filter_routes(back, only_with_seats)
-        return RoundTripResult(
+        back.trains = self._filter_routes(back.trains, only_with_seats)
+        return RoundTripSearchResult(
             forward=forward,
-            back=filtered_back,
-            raw={
-                "forward": [route.raw for route in forward],
-                "back": [route.raw for route in filtered_back],
-            },
+            back=back,
         )
 
     def find_stations(
